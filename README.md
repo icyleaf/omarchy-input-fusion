@@ -44,24 +44,16 @@ A visual rule management overlay plugin designed for **Omarchy 4.0+ (Quickshell)
 
 ## 🚀 Installation
 
-### Option 1: Using the Install Script (Local Development)
-
-Run the installation script directly from the repository root:
-
-```bash
-./install.sh
-```
-
-### Option 2: Via Omarchy Plugin Manager (Git Remote)
+### Option 1: Via Omarchy Plugin Manager (Git Remote)
 
 Once published to a Git repository:
 
 ```bash
-omarchy plugin add https://github.com/<your-username>/omarchy-hypr-input-switcher
+omarchy plugin add https://github.com/icyleaf/omarchy-hypr-input-switcher
 omarchy plugin enable icyleaf.hypr-input-switcher
 ```
 
-### Option 3: Manual Installation
+### Option 2: Manual Installation
 
 ```bash
 mkdir -p ~/.config/omarchy/plugins/icyleaf.hypr-input-switcher
