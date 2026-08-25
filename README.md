@@ -2,6 +2,8 @@
 
 A visual rule management overlay plugin designed for **Omarchy 4.0+ (Quickshell)**, allowing users to inspect, configure, and persist automatic input method switching rules for `hypr-input-switcher` in real time with **100% Pure Quickshell & JavaScript (Zero Python Dependency)**.
 
+![Preview](preview.png)
+
 ---
 
 ## ✨ Features
