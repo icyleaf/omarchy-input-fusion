@@ -51,8 +51,7 @@ A visual rule management overlay plugin designed for **Omarchy 4.0+ (Quickshell)
 Once published to a Git repository:
 
 ```bash
-omarchy plugin add https://github.com/icyleaf/omarchy-hypr-input-switcher
-omarchy plugin enable icyleaf.hypr-input-switcher
+omarchy plugin add https://github.com/icyleaf/omarchy-hypr-input-switcher --enable
 ```
 
 ### Option 2: Manual Installation
@@ -84,9 +83,11 @@ omarchy shell shell toggle icyleaf.hypr-input-switcher
 
 Add a keybinding to your Hyprland configuration (e.g. `~/.config/hypr/hyprland.conf` or `~/.config/hypr/bindings.conf`):
 
-```ini
-# Toggle Hypr Input Switcher Overlay with Super + Shift + I
-bind = $mainMod SHIFT, I, exec, omarchy-shell shell toggle icyleaf.hypr-input-switcher
+```lua
+# Toggle Hypr Input Switcher Overlay with Super + ALT + P
+o.bind("SUPER + ALT + P", "Hypr Input Swither", function()
+  hl.dispatch(hl.dsp.exec_cmd("omarchy-shell shell toggle icyleaf.hypr-input-switcher"))
+end)
 ```
 
 ---
