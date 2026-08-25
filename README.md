@@ -34,6 +34,14 @@ A visual rule management overlay plugin designed for **Omarchy 4.0+ (Quickshell)
 
 ---
 
+## 🛠️ Requirements
+
+- **Omarchy 4.0+** (`omarchy-shell` / Quickshell)
+- **[hypr-input-switcher](https://github.com/icyleaf/hypr-input-switcher)** (`/usr/bin/hypr-input-switcher` or in `$PATH`)
+- **[slurp](https://github.com/emersion/slurp)** _(optional)_: Enables interactive screen window picking
+
+---
+
 ## 🚀 Installation
 
 ### Option 1: Using the Install Script (Local Development)
@@ -86,14 +94,6 @@ Add a keybinding to your Hyprland configuration (e.g. `~/.config/hypr/hyprland.c
 # Toggle Hypr Input Switcher Overlay with Super + Shift + I
 bind = $mainMod SHIFT, I, exec, omarchy-shell shell toggle icyleaf.hypr-input-switcher
 ```
-
----
-
-## 🛠️ Requirements
-
-- **Omarchy 4.0+** (`omarchy-shell` / Quickshell)
-- **hypr-input-switcher** (`/usr/bin/hypr-input-switcher` or in `$PATH`)
-- **slurp** (for interactive window clicking/picking)
 
 ---
 

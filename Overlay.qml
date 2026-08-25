@@ -49,6 +49,7 @@ Item {
     property int runningPid: 0
     property string binaryVersion: ""
     property bool configExists: false
+    property bool hasSlurp: false
 
     // Version feature check: keep setting supported since 0.4.0
     function isVersionAtLeast(currentVer, requiredVer) {
@@ -263,6 +264,22 @@ Item {
         }
     }
 
+    // Diagnostics: Slurp Availability Probe
+    Process {
+        id: slurpCheckProcess
+        command: ["which", "slurp"]
+        property string outputBuffer: ""
+
+        stdout: SplitParser {
+            onRead: data => { slurpCheckProcess.outputBuffer += data }
+        }
+
+        onExited: (code, status) => {
+            root.hasSlurp = (code === 0 && outputBuffer.trim().length > 0);
+            outputBuffer = "";
+        }
+    }
+
     Timer {
         id: statusDelayTimer
         interval: 600
@@ -365,6 +382,8 @@ Item {
         versionProcess.running = true;
         pgrepProcess.outputBuffer = "";
         pgrepProcess.running = true;
+        slurpCheckProcess.outputBuffer = "";
+        slurpCheckProcess.running = true;
     }
 
     function launchDaemon() {
@@ -1336,6 +1355,7 @@ Item {
                                 }
 
                                 Button {
+                                    visible: root.hasSlurp
                                     text: root.tr("screen_pick")
                                     bordered: true
                                     accent: root.accent
