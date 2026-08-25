@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "icyleaf.hypr-input-switcher",
+  "name": "Hypr Input Switcher",
+  "version": "1.0.0",
+  "author": "icyleaf",
+  "description": "Visual rule configuration overlay for hypr-input-switcher in Omarchy 4.0",
+  "kinds": [
+    "overlay"
+  ],
+  "activation": "on-demand",
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "Overlay.qml"
+  },
+  "license": "MIT"
+}
