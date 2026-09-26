@@ -51,7 +51,7 @@ BarWidget {
     readonly property bool bloomChecking: backend.bloomChecking
     readonly property var bloomPackages: backend.bloomPackages
     readonly property var bloomUpdates: backend.bloomUpdates
-    // The unified Schema List (Enabled ∪ Bloom-installed ∪ Active).
+    // The unified Schema List (Installed ∪ Enabled ∪ Active).
     readonly property var schemaRows: backend.schemaRows
     readonly property int bloomUpdatesAvailable: backend.bloomUpdatesAvailable
     readonly property double bloomUpdatesAt: backend.bloomUpdatesAt

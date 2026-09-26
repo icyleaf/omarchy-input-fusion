@@ -62,9 +62,10 @@ uninstalled.
 _Avoid_: orphan, dangling schema, untracked
 
 **Schema List**:
-The set of Schemas a surface offers: the Enabled Schemas, plus — when Bloom is
-available — the Schemas owned by Installed Packages. This is the most any
-surface can show, since fcitx5 exposes only the Enabled set.
+The set of Schemas a surface offers: every Installed Schema (present on disk),
+plus the Enabled Schemas, plus the Schemas owned by Installed Packages, plus
+the Active Schema. fcitx5 exposes only the Enabled set, so the Installed set is
+discovered from the Rime user directory.
 _Avoid_: all schemas, available schemas
 
 **Input Method Group**:

@@ -79,13 +79,19 @@ Panel {
         var out = [];
         for (var i = 0; i < src.length; i++) {
             var r = src[i];
+            // Owner Package when tracked; a warning only in Bloom mode when a
+            // Schema is Enabled but no file is on disk (drift). An on-disk
+            // ownerless schema is normal, so it shows the bare id.
+            var sub = r.id;
+            if (r.owner !== "") sub = r.id + " · " + Bloom.packageLabel(r.owner);
+            else if (root.bloomVisible && r.enabled && !r.installed) sub = r.id + " · " + root.tr("schema_ownerless");
             out.push({
                 kind: "schema",
                 global: offset + i,
                 value: r.id,
                 id: r.id,
                 label: r.label,
-                sub: r.installed ? r.id + " · " + Bloom.packageLabel(r.owner) : r.id + " · " + root.tr("schema_ownerless"),
+                sub: sub,
                 badge: r.label.charAt(0),
                 installed: r.installed,
                 bloomEnabled: r.enabled,

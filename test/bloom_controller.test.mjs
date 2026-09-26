@@ -16,7 +16,7 @@ vm.runInContext(
     source +
         "\nmodule.exports = { whichCommand, listCommand, listRegistryCommand, updateCommand, deployCommand, launchCommand, " +
         "enableCommand, disableCommand, installArgs, removeArgs, upgradeArgs, upgradeAllArgs, " +
-        "parse, errorMessage, list, registry, updates, schemas, mergeIds, packageLabel, stringArray, updateArray };",
+        "parse, errorMessage, list, registry, updates, schemas, packageLabel, stringArray, updateArray };",
     context,
 );
 const Bloom = context.module.exports;
@@ -56,6 +56,7 @@ test("list shapes a good payload and filters empty schemas", () => {
         ok: true,
         rime_dir: "/rime",
         enabled_schemas: ["luna_pinyin", "", "cangjie"],
+        installed_schemas: ["luna_pinyin", "sno_ch_jp"],
         installed_packages: [
             { repo: "local/py", version: "local", installed_at: "2026-01-02T03:04:05Z", schemas: ["py", ""] },
         ],
@@ -64,6 +65,7 @@ test("list shapes a good payload and filters empty schemas", () => {
     const data = Bloom.list(raw);
     assert.equal(data.rimeDir, "/rime");
     assert.deepEqual([...data.enabledSchemas], ["luna_pinyin", "cangjie"]);
+    assert.deepEqual([...data.installedSchemas], ["luna_pinyin", "sno_ch_jp"]);
     assert.equal(data.packages.length, 1);
     assert.deepEqual([...data.packages[0].schemas], ["py"]);
     assert.equal(data.updatesAvailable, 3);
@@ -148,7 +150,7 @@ test("schemas builds the unified list: active, then enabled, then installed-disa
         { repo: "rime/rime-luna-pinyin", schemas: ["sno_ch_jp", "luna_pinyin"] },
     ];
     const labels = { sno_ch_jp: "中文", japanese: "日本語", py: "拼音", luna_pinyin: "朙月拼音" };
-    const rows = Bloom.schemas(["sno_ch_jp", "japanese"], packages, "sno_ch_jp", (id) => labels[id] || id);
+    const rows = Bloom.schemas(["sno_ch_jp", "japanese"], packages, [], "sno_ch_jp", (id) => labels[id] || id);
     assert.deepEqual(
         [...rows.map((r) => [r.id, r.enabled, r.installed, r.owner, r.active])],
         [
@@ -160,30 +162,35 @@ test("schemas builds the unified list: active, then enabled, then installed-disa
     );
 });
 
-test("schemas keeps an Active-but-not-Enabled schema and marks it ownerless", () => {
-    const rows = Bloom.schemas(["a"], [], "ghost", (id) => id);
+test("schemas keeps an Active-but-not-Enabled schema and marks it not installed", () => {
+    const rows = Bloom.schemas(["a"], [], [], "ghost", (id) => id);
     assert.deepEqual([...rows.map((r) => r.id)], ["ghost", "a"]);
     assert.equal(rows[0].active, true);
     assert.equal(rows[0].enabled, false);
     assert.equal(rows[0].installed, false);
 });
 
+test("schemas lists on-disk schemas as installed even without an owner", () => {
+    const rows = Bloom.schemas(["a"], [], ["a", "py"], "", (id) => id);
+    assert.deepEqual(
+        [...rows.map((r) => [r.id, r.enabled, r.installed, r.owner])],
+        [
+            ["a", true, true, ""],
+            ["py", false, true, ""],
+        ],
+    );
+});
+
 test("schemas: first owner wins and label falls back to the id", () => {
-    const rows = Bloom.schemas([], [{ repo: "a", schemas: ["x"] }, { repo: "b", schemas: ["x"] }], "", null);
+    const rows = Bloom.schemas([], [{ repo: "a", schemas: ["x"] }, { repo: "b", schemas: ["x"] }], [], "", null);
     assert.equal(rows.length, 1);
     assert.equal(rows[0].owner, "a");
     assert.equal(rows[0].label, "x");
 });
 
-test("mergeIds unions preserving order and dropping empties", () => {
-    assert.deepEqual([...Bloom.mergeIds(["a", "", "b"], ["b", "c"])], ["a", "b", "c"]);
-    assert.deepEqual([...Bloom.mergeIds(null, ["x"])], ["x"]);
-    assert.deepEqual([...Bloom.mergeIds([], [])], []);
-});
-
 test("schemas is empty-safe", () => {
-    assert.deepEqual([...Bloom.schemas([], [], "", null)], []);
-    assert.deepEqual([...Bloom.schemas(null, null, "", null)], []);
+    assert.deepEqual([...Bloom.schemas([], [], [], "", null)], []);
+    assert.deepEqual([...Bloom.schemas(null, null, null, "", null)], []);
 });
 
 console.log(`${passed} checks passed`);

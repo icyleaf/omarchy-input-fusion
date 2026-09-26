@@ -93,6 +93,7 @@ function list(raw) {
     return {
         rimeDir: String(obj.rime_dir || ""),
         enabledSchemas: stringArray(obj.enabled_schemas),
+        installedSchemas: stringArray(obj.installed_schemas),
         packages: packageArray(obj.installed_packages),
         updatesAvailable: numberOr(obj.updates_available, -1)
     };
@@ -117,21 +118,33 @@ function registry(raw) {
     return { registry: out };
 }
 
-// schemas builds the unified Schema List: the Enabled Schemas, plus every
-// Schema owned by an Installed Package, plus the Active Schema if it is none
-// of those (Active can outlive Enabled until a redeploy). Each row carries its
-// Enabled flag, its Owner Package (empty when ownerless), whether it is
-// installed, and whether it is Active.
+// schemas builds the unified Schema List: every Installed Schema (present on
+// disk), plus the Enabled Schemas, plus every Schema owned by an Installed
+// Package, plus the Active Schema if it is none of those (Active can outlive
+// Enabled until a redeploy). Each row carries its Enabled flag, its Owner
+// Package (empty when ownerless), whether it is installed, and whether it is
+// Active.
+//
+// The Installed set is what keeps a disabled Schema from vanishing: fcitx5
+// exposes only the Enabled set, so without it an installed-but-disabled Schema
+// would be unreachable.
 //
 // Sort: Active first, then the Enabled group, then the Installed-but-disabled
 // group; within a group by display name (labelOf), then by id as a tiebreak.
-function schemas(enabled, packages, activeId, labelOf) {
+function schemas(enabled, packages, installed, activeId, labelOf) {
     var enabledSet = {};
+    var installedSet = {};
     var i, j;
     if (Array.isArray(enabled)) {
         for (i = 0; i < enabled.length; i++) {
             var id = idOf(enabled[i]);
             if (id !== "") enabledSet[id] = true;
+        }
+    }
+    if (Array.isArray(installed)) {
+        for (i = 0; i < installed.length; i++) {
+            var onDisk = idOf(installed[i]);
+            if (onDisk !== "") installedSet[onDisk] = true;
         }
     }
 
@@ -149,11 +162,19 @@ function schemas(enabled, packages, activeId, labelOf) {
         }
     }
 
+    var seen = {};
     var ids = [];
-    for (var key in enabledSet) ids.push(key);
-    for (var owned2 in owners) if (enabledSet[owned2] === undefined) ids.push(owned2);
+    function add(value) {
+        if (value !== "" && seen[value] === undefined) {
+            seen[value] = true;
+            ids.push(value);
+        }
+    }
+    for (var enabledId in enabledSet) add(enabledId);
+    for (var installedId in installedSet) add(installedId);
+    for (var ownerId in owners) add(ownerId);
     var active = idOf(activeId);
-    if (active !== "" && ids.indexOf(active) === -1) ids.push(active);
+    add(active);
 
     var label = (typeof labelOf === "function") ? labelOf : function(value) { return String(value); };
     var rows = [];
@@ -165,7 +186,7 @@ function schemas(enabled, packages, activeId, labelOf) {
             id: rowId,
             label: text !== "" ? text : rowId,
             owner: hasOwner ? owners[rowId] : "",
-            installed: hasOwner,
+            installed: hasOwner || installedSet[rowId] === true,
             enabled: enabledSet[rowId] === true,
             active: rowId === active
         });
@@ -182,25 +203,6 @@ function schemas(enabled, packages, activeId, labelOf) {
         return 0;
     });
     return rows;
-}
-
-// mergeIds unions id lists preserving order, dropping empties and duplicates.
-// Used to fold Rime's Enabled set into Bloom's without trusting either alone.
-function mergeIds(primary, secondary) {
-    var out = [];
-    var seen = {};
-    var lists = [primary, secondary];
-    for (var l = 0; l < lists.length; l++) {
-        if (!Array.isArray(lists[l])) continue;
-        for (var i = 0; i < lists[l].length; i++) {
-            var id = idOf(lists[l][i]);
-            if (id !== "" && seen[id] === undefined) {
-                seen[id] = true;
-                out.push(id);
-            }
-        }
-    }
-    return out;
 }
 
 // schemaGroup ranks a row: Active first, then Enabled, then Installed-disabled.

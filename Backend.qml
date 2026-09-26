@@ -55,6 +55,8 @@ Item {
     property bool bloomRegistryPending: false
     property bool bloomUpdatesPending: false
     property var bloomEnabledSchemas: []
+    // Every *.schema.yaml on disk, Enabled or not; keeps disabled schemas listed.
+    property var bloomInstalledSchemas: []
     property var bloomPackages: []
     property var bloomUpdates: []
     property var bloomRegistry: []
@@ -121,21 +123,20 @@ Item {
         if (!pBloomRegistry.running) pBloomRegistry.running = true;
     }
 
-    // The unified Schema List: Enabled Schemas, plus Bloom-installed Schemas
-    // (Owner Package known), plus the Active Schema if it is neither. Rime's
-    // Enabled set is always folded in so a bloom that drifted cannot hide a
-    // Schema fcitx5 still reports. See ADR 0006.
+    // The unified Schema List: every Installed Schema (on disk), plus the
+    // Enabled Schemas, plus the Active Schema, plus Owner Packages when Bloom
+    // is available. See ADR 0006.
     readonly property var schemaRows: backend.buildSchemaRows()
 
     function buildSchemaRows() {
         var withBloom = backend.bloomAvailable && backend.bloomListReady;
-        var enabled = withBloom
-            ? Bloom.mergeIds(backend.bloomEnabledSchemas, backend.allSchemas)
-            : Bloom.mergeIds(backend.allSchemas, []);
+        var enabled = withBloom ? backend.bloomEnabledSchemas : backend.allSchemas;
         // Active only exists while Rime is the current Input Method; otherwise
         // the last schema would linger as Active.
         var activeId = backend.isRime ? backend.schema : "";
-        return Bloom.schemas(enabled, withBloom ? backend.bloomPackages : [], activeId, backend.schemaDisplay);
+        var packages = withBloom ? backend.bloomPackages : [];
+        var installed = withBloom ? backend.bloomInstalledSchemas : [];
+        return Bloom.schemas(enabled, packages, installed, activeId, backend.schemaDisplay);
     }
 
     // Enable/disable patch default.custom.yaml and redeploy: fast and safe
@@ -264,6 +265,7 @@ Item {
                 var data = Bloom.list(text);
                 if (data) {
                     backend.bloomEnabledSchemas = data.enabledSchemas;
+                    backend.bloomInstalledSchemas = data.installedSchemas;
                     backend.bloomPackages = data.packages;
                     if (data.updatesAvailable >= 0) backend.bloomUpdatesAvailable = data.updatesAvailable;
                     backend.bloomError = "";
