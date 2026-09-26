@@ -56,7 +56,10 @@ test("list shapes a good payload and filters empty schemas", () => {
         ok: true,
         rime_dir: "/rime",
         enabled_schemas: ["luna_pinyin", "", "cangjie"],
-        installed_schemas: ["luna_pinyin", "sno_ch_jp"],
+        installed_schemas: [
+            { id: "luna_pinyin", name: "朙月拼音", dependency: false },
+            { id: "sno_ch_jp", name: "SNO 中日混合拼音", dependency: true },
+        ],
         installed_packages: [
             { repo: "local/py", version: "local", installed_at: "2026-01-02T03:04:05Z", schemas: ["py", ""] },
         ],
@@ -65,7 +68,13 @@ test("list shapes a good payload and filters empty schemas", () => {
     const data = Bloom.list(raw);
     assert.equal(data.rimeDir, "/rime");
     assert.deepEqual([...data.enabledSchemas], ["luna_pinyin", "cangjie"]);
-    assert.deepEqual([...data.installedSchemas], ["luna_pinyin", "sno_ch_jp"]);
+    assert.deepEqual(
+        [...data.installedSchemas].map((s) => [s.id, s.name, s.dependency]),
+        [
+            ["luna_pinyin", "朙月拼音", false],
+            ["sno_ch_jp", "SNO 中日混合拼音", true],
+        ],
+    );
     assert.equal(data.packages.length, 1);
     assert.deepEqual([...data.packages[0].schemas], ["py"]);
     assert.equal(data.updatesAvailable, 3);
@@ -171,12 +180,27 @@ test("schemas keeps an Active-but-not-Enabled schema and marks it not installed"
 });
 
 test("schemas lists on-disk schemas as installed even without an owner", () => {
-    const rows = Bloom.schemas(["a"], [], ["a", "py"], "", (id) => id);
+    const rows = Bloom.schemas(["a"], [], [{ id: "a" }, { id: "py" }], "", (id) => id);
     assert.deepEqual(
         [...rows.map((r) => [r.id, r.enabled, r.installed, r.owner])],
         [
             ["a", true, true, ""],
             ["py", false, true, ""],
+        ],
+    );
+});
+
+test("schemas uses the schema name and marks components", () => {
+    const installed = [
+        { id: "terra_pinyin.extended", name: "地球拼音", dependency: true },
+        { id: "py", name: "拼音", dependency: false },
+    ];
+    const rows = Bloom.schemas([], [], installed, "", (id) => id);
+    assert.deepEqual(
+        [...rows.map((r) => [r.id, r.label, r.component])],
+        [
+            ["terra_pinyin.extended", "地球拼音", true],
+            ["py", "拼音", false],
         ],
     );
 });

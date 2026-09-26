@@ -93,7 +93,7 @@ function list(raw) {
     return {
         rimeDir: String(obj.rime_dir || ""),
         enabledSchemas: stringArray(obj.enabled_schemas),
-        installedSchemas: stringArray(obj.installed_schemas),
+        installedSchemas: installedArray(obj.installed_schemas),
         packages: packageArray(obj.installed_packages),
         updatesAvailable: numberOr(obj.updates_available, -1)
     };
@@ -133,7 +133,7 @@ function registry(raw) {
 // group; within a group by display name (labelOf), then by id as a tiebreak.
 function schemas(enabled, packages, installed, activeId, labelOf) {
     var enabledSet = {};
-    var installedSet = {};
+    var installedMap = {};
     var i, j;
     if (Array.isArray(enabled)) {
         for (i = 0; i < enabled.length; i++) {
@@ -143,8 +143,9 @@ function schemas(enabled, packages, installed, activeId, labelOf) {
     }
     if (Array.isArray(installed)) {
         for (i = 0; i < installed.length; i++) {
-            var onDisk = idOf(installed[i]);
-            if (onDisk !== "") installedSet[onDisk] = true;
+            var item = installed[i] || {};
+            var onDisk = idOf(item.id);
+            if (onDisk !== "") installedMap[onDisk] = { name: idOf(item.name), dependency: item.dependency === true };
         }
     }
 
@@ -171,7 +172,7 @@ function schemas(enabled, packages, installed, activeId, labelOf) {
         }
     }
     for (var enabledId in enabledSet) add(enabledId);
-    for (var installedId in installedSet) add(installedId);
+    for (var installedId in installedMap) add(installedId);
     for (var ownerId in owners) add(ownerId);
     var active = idOf(activeId);
     add(active);
@@ -181,12 +182,16 @@ function schemas(enabled, packages, installed, activeId, labelOf) {
     for (i = 0; i < ids.length; i++) {
         var rowId = ids[i];
         var hasOwner = owners[rowId] !== undefined;
-        var text = String(label(rowId));
+        var info = installedMap[rowId];
+        // Prefer the schema's own display name; fall back to the resolved label.
+        var name = info && info.name ? info.name : "";
+        var text = (name !== "" && name !== rowId) ? name : String(label(rowId));
         rows.push({
             id: rowId,
             label: text !== "" ? text : rowId,
             owner: hasOwner ? owners[rowId] : "",
-            installed: hasOwner || installedSet[rowId] === true,
+            installed: hasOwner || info !== undefined,
+            component: info !== undefined && info.dependency === true,
             enabled: enabledSet[rowId] === true,
             active: rowId === active
         });
@@ -224,6 +229,21 @@ function updates(raw) {
         updates: updateArray(obj.updates),
         updatesAvailable: numberOr(obj.updates_available, 0)
     };
+}
+
+// installedArray shapes installed_schemas: {id, name, dependency}. `name` is
+// the schema's own display name; `dependency` marks a schema another schema
+// lists under dependencies (usually a component, not a directly-used recipe).
+function installedArray(value) {
+    var out = [];
+    if (!Array.isArray(value)) return out;
+    for (var i = 0; i < value.length; i++) {
+        var item = value[i] || {};
+        var id = idOf(item.id);
+        if (id === "") continue;
+        out.push({ id: id, name: idOf(item.name), dependency: item.dependency === true });
+    }
+    return out;
 }
 
 function stringArray(value) {

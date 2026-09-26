@@ -23,8 +23,11 @@ lapses on the next redeploy, so the two markers render independently.
 
 ## Consequences
 
-- `bloom --json list` carries `present_schemas`; the plugin reads it and treats
-  a present Schema as Installed, ownerless unless a package owns it.
+- `bloom --json list` carries `installed_schemas` as `{id, name, dependency}`:
+  the scan reads each schema's own `name` (so the panel shows 地球拼音 rather
+  than `terra_pinyin.extended`) and flags a schema that another Installed Schema
+  lists under `dependencies` as a **Component Schema**. The panel tags such a
+  row when it is not Enabled, so a component is not mistaken for a recipe.
 - The Enabled toggle only exists while Bloom is available; the fallback list
   offers Set Active alone.
 - `bloom install` does not auto-enable, so an installed Schema can sit

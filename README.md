@@ -59,9 +59,10 @@ and the Overlay a third tab. All reads go through `bloom --json …` (see ADR
 - 🔁 **Schemas** — one **Schema List**: every Installed Schema (on disk), plus
   the Enabled set, plus the Schemas owned by Bloom packages, plus the Active
   Schema. It is Bloom-preferred with a Rime fallback (ADR 0006), so it works
-  with or without `bloom`. Clicking a row sets the Active Schema; a checkbox
-  (Bloom mode) enables/disables it in-process (`bloom enable` / `disable`), and
-  a disabled schema stays listed.
+  with or without `bloom`. Rows show each schema's own name, and a Component
+  Schema is tagged when it is not enabled. Clicking a row sets the Active
+  Schema; a checkbox (Bloom mode) enables/disables it in-process
+  (`bloom enable` / `disable`), and a disabled schema stays listed.
 - 🧩 **Installed Packages** — click a package to upgrade it.
 - ⬆️ **Updates** — packages whose remote `HEAD` differs, refreshed on a
   five-minute cache and on demand, never on the one-second fcitx5 poll; click

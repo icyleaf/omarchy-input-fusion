@@ -85,6 +85,9 @@ Panel {
             var sub = r.id;
             if (r.owner !== "") sub = r.id + " · " + Bloom.packageLabel(r.owner);
             else if (root.bloomVisible && r.enabled && !r.installed) sub = r.id + " · " + root.tr("schema_ownerless");
+            // A component (another schema depends on it) that the user has not
+            // enabled is usually not a recipe meant to be selected directly.
+            if (r.component && !r.enabled) sub += " · " + root.tr("schema_component");
             out.push({
                 kind: "schema",
                 global: offset + i,

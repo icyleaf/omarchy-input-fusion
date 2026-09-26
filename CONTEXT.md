@@ -50,6 +50,12 @@ is Enabled. Present because an Installed Package owns it, or because it was
 placed outside Bloom.
 _Avoid_: present schema, available schema
 
+**Component Schema**:
+An Installed Schema that another Schema lists in its `dependencies`, so it is
+usually present to support a recipe rather than to be typed with directly. It is
+still a Schema: it can be Enabled and Set Active.
+_Avoid_: dependency schema, helper schema, sub-schema
+
 **Owner Package**:
 The Installed Package whose `schemas` include a given Schema. Shown on a
 Schema List row to explain where the Schema came from.
