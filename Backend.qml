@@ -1,0 +1,348 @@
+import QtQuick
+import Quickshell
+import Quickshell.Io
+import "FcitxController.js" as Fcitx
+import "i18n.js" as I18n
+
+// The single owner of every backend process for Input Fusion. Callers read
+// typed state properties and call the select* / refresh() verbs; they never
+// touch a Process or parse raw output. See ADR 0004.
+//
+// Today the only engine is fcitx5 (over D-Bus via `busctl --json`), read and
+// written through the pure helpers in FcitxController.js. Bloom joins later
+// through the same seam.
+Item {
+    id: backend
+
+    // A QtObject cannot host child objects (no default property), so this is a
+    // zero-size invisible Item purely to own the backend processes.
+    visible: false
+    width: 0
+    height: 0
+
+    // --- inputs from the host widget ----------------------------------------
+    // Whether picking a Schema should also move to the Rime Input Method.
+    property bool autoSwitchToRime: true
+    // Set while the control panel is open: its keyboard focus shadows the
+    // application's fcitx5 input context, so reads taken then are wrong.
+    property bool suspendReads: false
+
+    // --- observable state ---------------------------------------------------
+    property int state: -1          // 0 closed, 1 Direct Mode, 2 active
+    property string imName: ""
+    property string imDisplay: ""
+    property string imSymbol: ""
+    property string schema: ""
+    property string groupName: ""
+    property var groupMembers: []
+    property var allSchemas: []
+    property bool daemonRunning: false
+    property string lastError: ""
+    property var configData: ({})
+
+    readonly property bool unavailable: backend.state === 0
+    readonly property bool direct: backend.state === 1
+    readonly property bool active: backend.state === 2
+    readonly property bool isRime: backend.active && backend.imName === "rime"
+
+    function schemaDisplay(schema) {
+        return Fcitx.schemaDisplay(backend.configData, schema);
+    }
+
+    // --- reads --------------------------------------------------------------
+    function refresh() {
+        if (!pState.running) pState.running = true;
+        if (!pInfo.running) pInfo.running = true;
+        if (!pGroup.running) pGroup.running = true;
+        if (!pSchema.running) pSchema.running = true;
+        if (!pSchemas.running) pSchemas.running = true;
+        if (!pDaemon.running) pDaemon.running = true;
+    }
+
+    readonly property bool planActive: backend.opPlan !== null
+
+    // Reads are dropped while the panel is open (SHADOWED context) and while a
+    // switch plan runs (a poll issued before the plan can land during it and
+    // overwrite the value the plan's verify step is about to read).
+    readonly property bool readAllowed: !backend.suspendReads && !backend.planActive
+
+    Process {
+        id: pState
+        command: Fcitx.controller("State")
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: if (backend.readAllowed) backend.state = Fcitx.integer(text)
+        }
+    }
+
+    Process {
+        id: pInfo
+        command: Fcitx.controller("CurrentInputMethodInfo")
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                if (!backend.readAllowed) return;
+                var info = Fcitx.inputMethodInfo(text);
+                if (info) {
+                    backend.imName = info.name;
+                    backend.imDisplay = info.display;
+                    backend.imSymbol = info.symbol;
+                }
+            }
+        }
+    }
+
+    Process {
+        id: pGroup
+        command: Fcitx.controller("CurrentInputMethodGroup")
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                if (!backend.readAllowed) return;
+                var group = Fcitx.firstString(text);
+                backend.groupName = group;
+                if (group !== "") {
+                    pGroupInfo.command = Fcitx.controller("FullInputMethodGroupInfo", ["s", group]);
+                    pGroupInfo.running = true;
+                }
+            }
+        }
+    }
+
+    Process {
+        id: pGroupInfo
+        command: []
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: if (backend.readAllowed) backend.groupMembers = Fcitx.fullGroup(text).members
+        }
+    }
+
+    Process {
+        id: pSchema
+        command: Fcitx.rime("GetCurrentSchema")
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: if (backend.readAllowed) backend.schema = Fcitx.firstString(text)
+        }
+    }
+
+    Process {
+        id: pSchemas
+        command: Fcitx.rime("ListAllSchemas")
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: backend.allSchemas = Fcitx.stringArray(text)
+        }
+    }
+
+    Process {
+        id: pDaemon
+        command: ["pgrep", "-f", "hypr-input-switcher"]
+        onExited: (code, status) => { backend.daemonRunning = (code === 0); }
+    }
+
+    // --- config labels ------------------------------------------------------
+    // Only the two flat sections the panel needs to label schemas: the
+    // Input Method / schema relationship and the human names. The Overlay
+    // remains the editor; this reader is deliberately minimal.
+    FileView {
+        id: configFileView
+        path: Quickshell.env("HOME") + "/.config/hypr-input-switcher/config.yaml"
+        watchChanges: true
+        printErrors: false
+        onLoaded: backend.configData = backend.parseLabelConfig(text())
+        onLoadFailed: backend.configData = ({})
+    }
+
+    function parseLabelConfig(rawText) {
+        var data = { rime_schemas: {}, display_names: {} };
+        if (!rawText) return data;
+        var section = "";
+        var lines = rawText.split("\n");
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            if (/^\S/.test(line)) {
+                var header = line.replace(/:.*$/, "").trim();
+                section = (header === "rime_schemas" || header === "display_names") ? header : "";
+                continue;
+            }
+            if (section === "") continue;
+            var match = line.match(/^\s+([^:#]+):\s*(.*)$/);
+            if (!match) continue;
+            var key = match[1].trim().replace(/^["']|["']$/g, "");
+            var value = match[2].trim().replace(/\s+#.*$/, "").replace(/^["']|["']$/g, "");
+            if (key !== "") data[section][key] = value;
+        }
+        return data;
+    }
+
+    // --- snapshot for the control panel -------------------------------------
+    // An immutable view taken while the panel is still closed, so it reflects
+    // the real application context rather than the panel's shadowed one.
+    function snapshot() {
+        var inputRows = [{ global: 0, value: "__direct__", label: I18n.t("direct_label"),
+                           sub: I18n.t("direct_sub"), badge: "A",
+                           selected: backend.state !== 2, enabled: true }];
+        for (var i = 0; i < backend.groupMembers.length; i++) {
+            var member = backend.groupMembers[i];
+            // A plain keyboard layout is reported as State "inactive", the same
+            // as Direct Mode; the Direct row already represents it.
+            if (Fcitx.isKeyboardInputMethod(member)) continue;
+            var name = member.display || member.name;
+            inputRows.push({ global: i + 1, value: member.name, label: name, sub: member.name,
+                             badge: member.symbol || name.charAt(0),
+                             selected: backend.state === 2 && backend.imName === member.name,
+                             enabled: true });
+        }
+        var rimeRows = [];
+        var offset = inputRows.length;
+        for (var j = 0; j < backend.allSchemas.length; j++) {
+            var id = backend.allSchemas[j];
+            var display = backend.schemaDisplay(id);
+            // Always selectable: picking a Schema while Rime is not active first
+            // moves to Rime, so a greyed row is a hint, not a disabled control.
+            rimeRows.push({ global: offset + j, value: id, label: display, sub: id,
+                            badge: display.charAt(0),
+                            selected: backend.isRime && backend.schema === id,
+                            enabled: true, muted: !backend.isRime });
+        }
+        return {
+            state: backend.state,
+            imName: backend.imName,
+            imDisplay: backend.imDisplay,
+            schema: backend.schema,
+            isRime: backend.isRime,
+            unavailable: backend.unavailable,
+            inputRows: inputRows,
+            rimeRows: rimeRows,
+            daemonRunning: backend.daemonRunning,
+            error: backend.lastError
+        };
+    }
+
+    // --- switching ----------------------------------------------------------
+    // A plan is a queue of steps run one at a time by `opProc`. A step either
+    // writes (no verify) or reads and verifies. A failed verify replays the
+    // whole plan, because fcitx5 accepts invalid names silently and a re-read
+    // alone could never observe the change. Plans run only while the panel is
+    // closed, when writes are not deferred by its keyboard focus.
+    property var opPlan: null
+    property int opIndex: 0
+    property int opAttempts: 0
+
+    Timer { id: opStart; interval: 160; repeat: false; onTriggered: backend.runStep() }
+    Timer { id: opDelay; interval: 100; repeat: false; onTriggered: backend.runStep() }
+
+    Process {
+        id: opProc
+        command: []
+        property var step: null
+        property string raw: ""
+        stdout: StdioCollector { waitForEnd: true; onStreamFinished: opProc.raw = text }
+        onExited: function(code, status) { backend.finishStep(opProc.step, opProc.raw); }
+    }
+
+    function startPlan(steps) {
+        backend.lastError = "";
+        backend.opPlan = steps;
+        backend.opIndex = 0;
+        backend.opAttempts = 0;
+        opStart.restart();
+    }
+
+    function runStep() {
+        if (!backend.opPlan) return;
+        if (backend.opIndex >= backend.opPlan.length) { backend.opPlan = null; backend.refresh(); return; }
+        var step = backend.opPlan[backend.opIndex];
+        if (step.kind === "check") { backend.finishStep(step, ""); return; }
+        opProc.command = step.cmd;
+        opProc.raw = "";
+        opProc.step = step;
+        opProc.running = true;
+    }
+
+    // fcitx5 acks a switch before its input context has committed the new
+    // value, so a read issued in the same tick can still see the old one. Let
+    // the bus settle between steps instead of running write and verify back to
+    // back.
+    function finishStep(step, raw) {
+        if (step) {
+            if (step.kind === "read" && step.apply) step.apply(raw);
+            if (step.verify && !step.verify(raw)) { backend.retryPlan(); return; }
+        }
+        backend.opIndex += 1;
+        opDelay.restart();
+    }
+
+    function retryPlan() {
+        backend.opAttempts += 1;
+        if (backend.opAttempts > 5) {
+            backend.opPlan = null;
+            backend.lastError = I18n.t("switch_failed");
+            backend.refresh();
+            return;
+        }
+        backend.opIndex = 0;
+        opDelay.restart();
+    }
+
+    function readStateStep() {
+        return { kind: "read", cmd: Fcitx.controller("State"),
+                 apply: function(raw) { backend.state = Fcitx.integer(raw); } };
+    }
+
+    function readInfoStep() {
+        return { kind: "read", cmd: Fcitx.controller("CurrentInputMethodInfo"),
+                 apply: function(raw) {
+                     var info = Fcitx.inputMethodInfo(raw);
+                     if (info) { backend.imName = info.name; backend.imDisplay = info.display; backend.imSymbol = info.symbol; }
+                 } };
+    }
+
+    function readSchemaStep() {
+        return { kind: "read", cmd: Fcitx.rime("GetCurrentSchema"),
+                 apply: function(raw) { backend.schema = Fcitx.firstString(raw); } };
+    }
+
+    function selectDirect() {
+        if (backend.state === 1) return;
+        backend.startPlan([
+            { kind: "write", cmd: Fcitx.controller("Deactivate") },
+            backend.readStateStep(),
+            { kind: "check", verify: function() { return backend.state === 1; } }
+        ]);
+    }
+
+    function selectInputMethod(name) {
+        if (!name) return;
+        if (backend.state === 2 && backend.imName === name) return;
+        backend.startPlan([
+            { kind: "write", cmd: Fcitx.controller("Activate") },
+            { kind: "write", cmd: Fcitx.controller("SetCurrentIM", ["s", name]) },
+            backend.readStateStep(),
+            backend.readInfoStep(),
+            { kind: "check", verify: function() { return backend.state === 2 && backend.imName === name; } }
+        ]);
+    }
+
+    // A Schema applies immediately even while Rime is not the active Input
+    // Method, so the schema goes first and the move to Rime follows.
+    function selectSchema(name) {
+        if (!name) return;
+        if (backend.isRime && backend.schema === name) return;
+        var steps = [
+            { kind: "write", cmd: Fcitx.rime("SetSchema", ["s", name]) },
+            backend.readSchemaStep(),
+            { kind: "check", verify: function() { return backend.schema === name; } }
+        ];
+        if (backend.autoSwitchToRime && backend.imName !== "rime") {
+            steps.push({ kind: "write", cmd: Fcitx.controller("Activate") });
+            steps.push({ kind: "write", cmd: Fcitx.controller("SetCurrentIM", ["s", "rime"]) });
+            steps.push(backend.readStateStep());
+            steps.push(backend.readInfoStep());
+            steps.push({ kind: "check", verify: function() { return backend.state === 2 && backend.imName === "rime"; } });
+        }
+        backend.startPlan(steps);
+    }
+}

@@ -1,17 +1,46 @@
 {
   "schemaVersion": 1,
-  "id": "icyleaf.hypr-input-switcher",
-  "name": "Hypr Input Switcher",
-  "version": "1.0.0",
+  "id": "icyleaf.input-fusion",
+  "name": "Input Fusion",
+  "version": "2.0.0",
   "author": "icyleaf",
-  "description": "Visual rule configuration overlay for hypr-input-switcher in Omarchy 4.0",
+  "description": "Fuses fcitx5 input-method control, hypr-input-switcher rules, and Bloom Rime packages into one Omarchy bar widget and overlay.",
   "kinds": [
-    "overlay"
+    "overlay",
+    "bar-widget"
   ],
   "activation": "on-demand",
   "keepLoaded": true,
   "entryPoints": {
-    "overlay": "Overlay.qml"
+    "overlay": "Overlay.qml",
+    "barWidget": "Widget.qml"
+  },
+  "barWidget": {
+    "displayName": "Input Fusion",
+    "description": "Live fcitx5 input method and Rime schema status; click to switch.",
+    "category": "Desktop",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "showSchemaOnBar": true,
+      "autoSwitchToRime": true
+    },
+    "schema": [
+      {
+        "key": "showSchemaOnBar",
+        "type": "boolean",
+        "label": "Show Rime schema on bar",
+        "description": "Append the current Rime schema name to the bar label while the Rime input method is active.",
+        "defaultValue": true
+      },
+      {
+        "key": "autoSwitchToRime",
+        "type": "boolean",
+        "label": "Switch to Rime when picking a schema",
+        "description": "Selecting a Rime schema switches fcitx5 to the Rime input method first.",
+        "defaultValue": true
+      }
+    ]
   },
   "license": "MIT"
 }

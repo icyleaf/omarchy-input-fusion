@@ -15,7 +15,7 @@ Item {
     property var manifest: null
     property bool opened: false
 
-    property string pluginId: (root.manifest && root.manifest.id) || "icyleaf.hypr-input-switcher"
+    property string pluginId: (root.manifest && root.manifest.id) || "icyleaf.input-fusion"
     property var configData: ({})
     property string defaultInputMethod: "english"
     property string statusMessage: ""

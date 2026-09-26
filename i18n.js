@@ -67,7 +67,16 @@ var translations = {
         "im_engine_placeholder": "e.g. rime, keyboard-us, mozc...",
         "im_rime_schema_label": "Rime Schema (e.g. rime_frost, jaroomaji, luna_pinyin)",
         "im_rime_schema_placeholder": "e.g. rime_frost, jaroomaji...",
-        "im_key_engine_required": "Key and Engine cannot be empty"
+        "im_key_engine_required": "Key and Engine cannot be empty",
+        "section_input_method": "Input Method",
+        "section_rime_schema": "Rime Schema",
+        "direct_label": "English (Direct)",
+        "direct_sub": "Deactivate fcitx5",
+        "rime_inactive_hint": "Rime is not the current input method; picking a schema switches to it first.",
+        "daemon_hint": "Window rules may override a manual choice when you switch focus.",
+        "fcitx_unavailable": "Fcitx5 is not running",
+        "state_direct": "Direct mode — fcitx5 is deactivated",
+        "switch_failed": "Could not switch input method or schema"
     },
     "zh": {
         "title": "Hypr Input Switcher",
@@ -133,7 +142,16 @@ var translations = {
         "im_engine_placeholder": "例如: rime, keyboard-us, mozc...",
         "im_rime_schema_label": "Rime 方案名称 Schema (如 rime_frost, jaroomaji, luna_pinyin)",
         "im_rime_schema_placeholder": "例如: rime_frost, jaroomaji...",
-        "im_key_engine_required": "输入法 Key 和引擎名称不能为空"
+        "im_key_engine_required": "输入法 Key 和引擎名称不能为空",
+        "section_input_method": "输入法",
+        "section_rime_schema": "Rime 方案",
+        "direct_label": "英文 (直通)",
+        "direct_sub": "关闭 fcitx5",
+        "rime_inactive_hint": "当前输入法不是 Rime,选择方案时会先切换到 Rime。",
+        "daemon_hint": "切换窗口时,规则可能覆盖手动选择。",
+        "fcitx_unavailable": "Fcitx5 未运行",
+        "state_direct": "直通模式 — fcitx5 已关闭",
+        "switch_failed": "无法切换输入法或方案"
     }
 };
 
