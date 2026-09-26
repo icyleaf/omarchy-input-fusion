@@ -23,7 +23,8 @@ The whole plugin is **pure Quickshell & JavaScript** — no Python.
   Input Method symbol, plus the Active Rime Schema while Rime is active
   (configurable).
 - 🖱️ **Click-to-switch control panel**: left click opens a panel with an
-  **Input Method** section and a **Rime Schema** section; a click switches.
+  **Input Method** section and a unified **Schema** section; a click sets the
+  Active Schema.
 - 🅰️ **Direct Mode**: a dedicated row deactivates fcitx5, falling through to
   the bare keyboard layout (the `english` state).
 - 🔄 **Optimistic, verified switching**: every switch is written over D-Bus and
@@ -55,8 +56,11 @@ and the Overlay a third tab. All reads go through `bloom --json …` (see ADR
 
 **Bar panel** — compact and click-driven:
 
-- 🔁 **Schemas** — every Schema of the Installed Packages, ticked when enabled;
-  a click enables/disables it in-process (`bloom enable` / `disable`).
+- 🔁 **Schemas** — one **Schema List**: the Enabled Schemas, plus every Schema
+  an Installed Package owns, plus the Active Schema if it is neither. It is
+  Bloom-preferred with a Rime fallback (ADR 0006), so it works with or without
+  `bloom`. Clicking a row sets the Active Schema; a checkbox (Bloom mode)
+  enables/disables it in-process (`bloom enable` / `disable`).
 - 🧩 **Installed Packages** — click a package to upgrade it.
 - ⬆️ **Updates** — packages whose remote `HEAD` differs, refreshed on a
   five-minute cache and on demand, never on the one-second fcitx5 poll; click

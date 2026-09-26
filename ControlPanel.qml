@@ -5,8 +5,9 @@ import qs.Ui
 import "i18n.js" as I18n
 import "BloomController.js" as Bloom
 
-// Control panel for the Input Fusion bar widget: the fcitx5 Input Method and
-// Rime Schema sections, plus the Bloom bridge (schemas, packages, updates).
+// Control panel for the Input Fusion bar widget: the fcitx5 Input Method
+// section, the unified Schema List, and the Bloom bridge (packages, updates).
+// The Schema List is Bloom-preferred with a Rime fallback (ADR 0006).
 //
 // This panel holds no processes and reads no live fcitx5 state of its own.
 // A focused layer-shell surface makes fcitx5 report and switch its own
@@ -42,37 +43,69 @@ Panel {
     readonly property color panelBackground: Color.popups.background
     readonly property color panelAccent: Color.accent
 
-    // --- snapshot from the widget -------------------------------------------
+    // --- snapshot from the widget (fcitx5, frozen at open) ------------------
     property var snapshot: ({ error: "", imDisplay: "", schema: "", state: -1,
                               isRime: false, unavailable: false, daemonRunning: false })
     property var inputRows: []
-    property var rimeRows: []
     property int cursor: 0
+    // Set by Enter (returnRequested) so the activateRequested that follows it
+    // is not mistaken for Space. See the key catcher below.
+    property bool suppressActivate: false
 
-    // --- Bloom bridge (read-only) -------------------------------------------
-    // Unlike fcitx5, Bloom is not shadowed by the panel's keyboard focus, so
-    // these bind live to the widget and may update while the panel is open.
+    // --- Schema List (Bloom-preferred, live) --------------------------------
+    // Schema data is not shadowed by the panel's focus, so it binds live to the
+    // widget. `schemaRows` is the widget's unified list with cursor indices.
     readonly property bool bloomVisible: root.hostWidget ? root.hostWidget.bloomAvailable : false
     readonly property bool bloomChecking: root.hostWidget ? root.hostWidget.bloomChecking : false
-    readonly property var bloomEnabledSchemas: root.hostWidget ? root.hostWidget.bloomEnabledSchemas : []
     readonly property var bloomPackages: root.hostWidget ? root.hostWidget.bloomPackages : []
     readonly property var bloomUpdates: root.hostWidget ? root.hostWidget.bloomUpdates : []
-    readonly property var bloomSchemas: root.hostWidget ? root.hostWidget.bloomSchemas : []
     readonly property int bloomUpdatesAvailable: root.hostWidget ? root.hostWidget.bloomUpdatesAvailable : -1
     readonly property double bloomUpdatesAt: root.hostWidget ? root.hostWidget.bloomUpdatesAt : 0
     readonly property string bloomError: root.hostWidget ? root.hostWidget.bloomError : ""
     readonly property bool bloomWriteRunning: root.hostWidget ? root.hostWidget.bloomWriteRunning : false
     readonly property string bloomWriteError: root.hostWidget ? root.hostWidget.bloomWriteError : ""
 
+    readonly property var rawSchemaRows: root.hostWidget ? root.hostWidget.schemaRows : []
+    property var schemaRows: []
+    // The Schema id a toggle just changed, so the cursor can follow it across
+    // the re-sort that the fresh list triggers.
+    property string followId: ""
+
+    onRawSchemaRowsChanged: root.syncSchemaRows()
+
+    function syncSchemaRows() {
+        var src = root.rawSchemaRows;
+        var offset = root.inputRows.length;
+        var out = [];
+        for (var i = 0; i < src.length; i++) {
+            var r = src[i];
+            out.push({
+                kind: "schema",
+                global: offset + i,
+                value: r.id,
+                id: r.id,
+                label: r.label,
+                sub: r.installed ? r.id + " · " + Bloom.packageLabel(r.owner) : r.id + " · " + root.tr("schema_ownerless"),
+                badge: r.label.charAt(0),
+                installed: r.installed,
+                bloomEnabled: r.enabled,
+                selected: r.active,
+                enabled: true
+            });
+        }
+        root.schemaRows = out;
+        if (root.followId !== "") {
+            for (var j = 0; j < out.length; j++) {
+                if (out[j].id === root.followId) { root.cursor = out[j].global; break; }
+            }
+            root.followId = "";
+        }
+    }
+
     function bloomRefresh() {
         if (!root.hostWidget) return;
         root.hostWidget.refreshBloom();
         root.hostWidget.refreshBloomUpdates();
-    }
-
-    // Enable/disable run in-process through the widget's Backend.
-    function bloomToggle(schema, enabled) {
-        if (root.hostWidget) root.hostWidget.bloomToggleSchema(schema, enabled);
     }
 
     // Upgrade opens a floating terminal via the widget (the panel holds no
@@ -86,12 +119,13 @@ Panel {
         var snap = root.hostWidget.snapshot();
         root.snapshot = snap;
         root.inputRows = snap.inputRows;
-        root.rimeRows = snap.rimeRows;
+        root.followId = "";
+        root.syncSchemaRows();
         root.cursor = root.selectedGlobalIndex();
     }
 
     function allRows() {
-        return root.inputRows.concat(root.rimeRows);
+        return root.inputRows.concat(root.schemaRows);
     }
 
     function currentRow() {
@@ -122,12 +156,24 @@ Panel {
         else root.cursor = 0;
     }
 
-    function activate(row) {
-        if (!row || !row.enabled || !root.hostWidget) return;
-        var value = row.value;
-        var isInputMethod = value !== "__direct__" && root.inputRows.indexOf(row) !== -1;
+    // Set Active (a Schema) or switch the Input Method; both close the panel
+    // first so fcitx5 is not writing from a focused surface.
+    function commitRow(row) {
+        if (!row || row.enabled === false || !root.hostWidget) return;
+        var isInputMethod = row.kind === "input" && row.value !== "__direct__";
         root.close();
-        root.hostWidget.applySelection(value, isInputMethod);
+        root.hostWidget.applySelection(row.value, isInputMethod);
+    }
+
+    function commitCurrentRow() { root.commitRow(root.currentRow()); }
+
+    // Enable/Disable a Schema in-process (Bloom mode only); the panel stays
+    // open and the cursor follows the row to its new group.
+    function toggleEnabled(row) {
+        if (!row || row.kind !== "schema" || !root.bloomVisible || root.bloomWriteRunning) return;
+        if (!root.hostWidget) return;
+        root.followId = row.id;
+        root.hostWidget.bloomToggleSchema(row.id, !row.bloomEnabled);
     }
 
     function open() {
@@ -155,7 +201,15 @@ Panel {
             id: keyCatcher
             anchors.fill: parent
             onMoveRequested: function(dx, dy) { root.moveCursor(dy) }
-            onActivateRequested: root.activate(root.currentRow())
+            // Enter emits returnRequested then activateRequested; Space emits
+            // only activateRequested. So Enter = Set Active, Space = toggle.
+            onReturnRequested: { root.suppressActivate = true; root.commitCurrentRow() }
+            onActivateRequested: {
+                if (root.suppressActivate) { root.suppressActivate = false; return; }
+                var row = root.currentRow();
+                if (row && row.kind === "schema") root.toggleEnabled(row);
+                else root.commitCurrentRow();
+            }
             onTabRequested: function(direction) { root.switchSection(direction) }
             onCloseRequested: root.close()
 
@@ -193,7 +247,7 @@ Panel {
                         PanelSectionHeader {
                             width: parent.width
                             foreground: root.panelForeground
-                            text: root.tr("section_rime_schema")
+                            text: root.tr("section_schemas")
                         }
 
                         Text {
@@ -207,9 +261,30 @@ Panel {
                             wrapMode: Text.WordWrap
                         }
 
+                        Text {
+                            width: parent.width
+                            visible: !root.bloomVisible
+                            text: root.tr("schema_fallback_hint")
+                            color: root.panelForeground
+                            opacity: 0.42
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            wrapMode: Text.WordWrap
+                        }
+
+                        Text {
+                            width: parent.width
+                            visible: root.schemaRows.length === 0
+                            text: root.tr("bloom_no_enabled")
+                            color: root.panelForeground
+                            opacity: 0.42
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                        }
+
                         Repeater {
-                            model: root.rimeRows
-                            delegate: rowDelegate
+                            model: root.schemaRows
+                            delegate: schemaRowDelegate
                         }
 
                         // --- Bloom (read + write) -------------------------------
@@ -224,31 +299,6 @@ Panel {
                                 width: parent.width
                                 foreground: root.panelForeground
                                 text: root.tr("section_bloom")
-                            }
-
-                            Text {
-                                width: parent.width
-                                text: root.tr("bloom_schemas")
-                                color: root.panelForeground
-                                opacity: 0.58
-                                font.family: Style.font.family
-                                font.pixelSize: Style.font.caption
-                                font.bold: true
-                            }
-
-                            Text {
-                                width: parent.width
-                                visible: root.bloomSchemas.length === 0
-                                text: root.tr("bloom_no_enabled")
-                                color: root.panelForeground
-                                opacity: 0.42
-                                font.family: Style.font.family
-                                font.pixelSize: Style.font.caption
-                            }
-
-                            Repeater {
-                                model: root.bloomSchemas
-                                delegate: bloomSchemaDelegate
                             }
 
                             Text {
@@ -436,25 +486,44 @@ Panel {
                 cursorShape: row.modelData.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                 onClicked: {
                     root.cursor = row.modelData.global;
-                    root.activate(row.modelData);
+                    root.commitRow(row.modelData);
                 }
             }
         }
     }
 
-    // Bloom schema row: click toggles enable/disable (in-process).
+    // Unified Schema row: the Enabled checkbox toggles Enable/Disable
+    // (Bloom mode only) and stays open; clicking the rest sets the Active
+    // Schema and closes the panel. The checkbox is declared after the row
+    // MouseArea so it wins the click inside its box.
     Component {
-        id: bloomSchemaDelegate
+        id: schemaRowDelegate
 
         Rectangle {
             id: schemaRow
             required property var modelData
 
-            width: parent.width
-            height: Style.space(30)
+            width: contentColumn.width
+            height: Style.space(38)
             radius: Style.cornerRadius
-            color: schemaMouse.containsMouse ? Style.hoverFillFor(root.panelForeground, root.panelAccent) : "transparent"
-            opacity: root.bloomWriteRunning ? 0.55 : 1.0
+            color: {
+                if (schemaRow.modelData.selected) return Style.selectedFillFor(root.panelForeground, root.panelAccent);
+                if (schemaMouse.containsMouse || schemaRow.modelData.global === root.cursor)
+                    return Style.hoverFillFor(root.panelForeground, root.panelAccent);
+                return "transparent";
+            }
+            opacity: (root.bloomWriteRunning && schemaRow.modelData.global === root.cursor) ? 0.55 : 1.0
+
+            MouseArea {
+                id: schemaMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    root.cursor = schemaRow.modelData.global;
+                    root.commitRow(schemaRow.modelData);
+                }
+            }
 
             Row {
                 anchors.fill: parent
@@ -462,34 +531,86 @@ Panel {
                 anchors.rightMargin: Style.spacing.rowPaddingX
                 spacing: Style.spacing.controlGap
 
-                Text {
-                    width: Style.space(20)
+                Item {
+                    id: enabledBox
+                    width: Style.space(18)
+                    height: width
                     anchors.verticalCenter: parent.verticalCenter
-                    text: schemaRow.modelData.enabled ? "✓" : "○"
-                    color: schemaRow.modelData.enabled ? Color.accent : root.panelForeground
+                    visible: root.bloomVisible
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: Style.cornerRadius
+                        color: "transparent"
+                        border.width: 1
+                        border.color: schemaRow.modelData.bloomEnabled ? Color.accent : root.panelForeground
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: schemaRow.modelData.bloomEnabled ? "✓" : ""
+                            color: Color.accent
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: !root.bloomWriteRunning
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            root.cursor = schemaRow.modelData.global;
+                            root.toggleEnabled(schemaRow.modelData);
+                        }
+                    }
+                }
+
+                Text {
+                    visible: !root.bloomVisible
+                    width: Style.space(18)
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: schemaRow.modelData.badge
+                    color: root.panelForeground
                     font.family: Style.font.family
                     font.pixelSize: Style.font.body
                     horizontalAlignment: Text.AlignHCenter
                 }
 
-                Text {
+                Column {
                     anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width - Style.space(20) - Style.spacing.controlGap
-                    text: schemaRow.modelData.id
-                    color: root.panelForeground
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.body
-                    elide: Text.ElideRight
-                }
-            }
+                    width: parent.width - Style.space(18) - active.width - Style.spacing.controlGap * 2
+                    spacing: 0
 
-            MouseArea {
-                id: schemaMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                enabled: !root.bloomWriteRunning
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.bloomToggle(schemaRow.modelData.id, !schemaRow.modelData.enabled)
+                    Text {
+                        width: parent.width
+                        text: schemaRow.modelData.label
+                        color: root.panelForeground
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.body
+                        font.bold: schemaRow.modelData.selected
+                        elide: Text.ElideRight
+                    }
+
+                    Text {
+                        width: parent.width
+                        visible: schemaRow.modelData.sub !== "" && schemaRow.modelData.sub !== schemaRow.modelData.label
+                        text: schemaRow.modelData.sub
+                        color: root.panelForeground
+                        opacity: 0.58
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        elide: Text.ElideRight
+                    }
+                }
+
+                Text {
+                    id: active
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: schemaRow.modelData.selected ? "●" : ""
+                    color: Color.accent
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                }
             }
         }
     }

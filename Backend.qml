@@ -47,6 +47,8 @@ Item {
     // network. The only writes here are the fast, safe ones (enable, disable,
     // deploy); install/upgrade/remove are launched in a terminal by the UI.
     property bool bloomAvailable: false
+    // True once `bloom --json list` has succeeded; drives bloom-preferred mode.
+    property bool bloomListReady: false
     property bool bloomChecking: false
     // Set when a registry/update read is asked for before Bloom detection has
     // finished; replayed once the binary is confirmed present.
@@ -119,9 +121,22 @@ Item {
         if (!pBloomRegistry.running) pBloomRegistry.running = true;
     }
 
-    // Enabled Schemas ∪ schemas owned by Installed Packages, so an
-    // installed-but-disabled schema can still be re-enabled from the panel.
-    readonly property var bloomSchemas: Bloom.schemas(backend.bloomEnabledSchemas, backend.bloomPackages)
+    // The unified Schema List: Enabled Schemas, plus Bloom-installed Schemas
+    // (Owner Package known), plus the Active Schema if it is neither. Rime's
+    // Enabled set is always folded in so a bloom that drifted cannot hide a
+    // Schema fcitx5 still reports. See ADR 0006.
+    readonly property var schemaRows: backend.buildSchemaRows()
+
+    function buildSchemaRows() {
+        var withBloom = backend.bloomAvailable && backend.bloomListReady;
+        var enabled = withBloom
+            ? Bloom.mergeIds(backend.bloomEnabledSchemas, backend.allSchemas)
+            : Bloom.mergeIds(backend.allSchemas, []);
+        // Active only exists while Rime is the current Input Method; otherwise
+        // the last schema would linger as Active.
+        var activeId = backend.isRime ? backend.schema : "";
+        return Bloom.schemas(enabled, withBloom ? backend.bloomPackages : [], activeId, backend.schemaDisplay);
+    }
 
     // Enable/disable patch default.custom.yaml and redeploy: fast and safe
     // enough to run in the shell process.
@@ -252,8 +267,10 @@ Item {
                     backend.bloomPackages = data.packages;
                     if (data.updatesAvailable >= 0) backend.bloomUpdatesAvailable = data.updatesAvailable;
                     backend.bloomError = "";
+                    backend.bloomListReady = true;
                 } else {
                     backend.bloomError = Bloom.errorMessage(text) || I18n.t("bloom_unreadable");
+                    backend.bloomListReady = false;
                 }
             }
         }
@@ -356,7 +373,7 @@ Item {
     // An immutable view taken while the panel is still closed, so it reflects
     // the real application context rather than the panel's shadowed one.
     function snapshot() {
-        var inputRows = [{ global: 0, value: "__direct__", label: I18n.t("direct_label"),
+        var inputRows = [{ kind: "input", global: 0, value: "__direct__", label: I18n.t("direct_label"),
                            sub: I18n.t("direct_sub"), badge: "A",
                            selected: backend.state !== 2, enabled: true }];
         for (var i = 0; i < backend.groupMembers.length; i++) {
@@ -365,23 +382,13 @@ Item {
             // as Direct Mode; the Direct row already represents it.
             if (Fcitx.isKeyboardInputMethod(member)) continue;
             var name = member.display || member.name;
-            inputRows.push({ global: i + 1, value: member.name, label: name, sub: member.name,
+            inputRows.push({ kind: "input", global: inputRows.length, value: member.name, label: name, sub: member.name,
                              badge: member.symbol || name.charAt(0),
                              selected: backend.state === 2 && backend.imName === member.name,
                              enabled: true });
         }
-        var rimeRows = [];
-        var offset = inputRows.length;
-        for (var j = 0; j < backend.allSchemas.length; j++) {
-            var id = backend.allSchemas[j];
-            var display = backend.schemaDisplay(id);
-            // Always selectable: picking a Schema while Rime is not active first
-            // moves to Rime, so a greyed row is a hint, not a disabled control.
-            rimeRows.push({ global: offset + j, value: id, label: display, sub: id,
-                            badge: display.charAt(0),
-                            selected: backend.isRime && backend.schema === id,
-                            enabled: true, muted: !backend.isRime });
-        }
+        // The Schema list is not part of the snapshot: it is not shadowed by
+        // the panel's focus and is exposed as `schemaRows` instead.
         return {
             state: backend.state,
             imName: backend.imName,
@@ -390,7 +397,6 @@ Item {
             isRime: backend.isRime,
             unavailable: backend.unavailable,
             inputRows: inputRows,
-            rimeRows: rimeRows,
             daemonRunning: backend.daemonRunning,
             error: backend.lastError
         };

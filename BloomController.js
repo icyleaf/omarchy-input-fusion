@@ -117,34 +117,101 @@ function registry(raw) {
     return { registry: out };
 }
 
-// schemas unions the Enabled Schemas with every schema owned by an Installed
-// Package, so a disabled-but-installed schema is still offered (and can be
-// re-enabled). Rows are sorted and carry their enabled flag.
-function schemas(enabled, packages) {
-    var state = {};
+// schemas builds the unified Schema List: the Enabled Schemas, plus every
+// Schema owned by an Installed Package, plus the Active Schema if it is none
+// of those (Active can outlive Enabled until a redeploy). Each row carries its
+// Enabled flag, its Owner Package (empty when ownerless), whether it is
+// installed, and whether it is Active.
+//
+// Sort: Active first, then the Enabled group, then the Installed-but-disabled
+// group; within a group by display name (labelOf), then by id as a tiebreak.
+function schemas(enabled, packages, activeId, labelOf) {
+    var enabledSet = {};
     var i, j;
     if (Array.isArray(enabled)) {
         for (i = 0; i < enabled.length; i++) {
-            var id = String(enabled[i] === undefined || enabled[i] === null ? "" : enabled[i]);
-            if (id !== "") state[id] = true;
+            var id = idOf(enabled[i]);
+            if (id !== "") enabledSet[id] = true;
         }
     }
+
+    var owners = {};
     if (Array.isArray(packages)) {
         for (i = 0; i < packages.length; i++) {
-            var list = (packages[i] || {}).schemas;
+            var pkg = packages[i] || {};
+            var repo = idOf(pkg.repo);
+            var list = pkg.schemas;
             if (!Array.isArray(list)) continue;
             for (j = 0; j < list.length; j++) {
-                var schema = String(list[j] === undefined || list[j] === null ? "" : list[j]);
-                if (schema !== "" && state[schema] === undefined) state[schema] = false;
+                var owned = idOf(list[j]);
+                if (owned !== "" && owners[owned] === undefined) owners[owned] = repo;
             }
         }
     }
+
     var ids = [];
-    for (var key in state) ids.push(key);
-    ids.sort();
+    for (var key in enabledSet) ids.push(key);
+    for (var owned2 in owners) if (enabledSet[owned2] === undefined) ids.push(owned2);
+    var active = idOf(activeId);
+    if (active !== "" && ids.indexOf(active) === -1) ids.push(active);
+
+    var label = (typeof labelOf === "function") ? labelOf : function(value) { return String(value); };
     var rows = [];
-    for (i = 0; i < ids.length; i++) rows.push({ id: ids[i], enabled: state[ids[i]] === true });
+    for (i = 0; i < ids.length; i++) {
+        var rowId = ids[i];
+        var hasOwner = owners[rowId] !== undefined;
+        var text = String(label(rowId));
+        rows.push({
+            id: rowId,
+            label: text !== "" ? text : rowId,
+            owner: hasOwner ? owners[rowId] : "",
+            installed: hasOwner,
+            enabled: enabledSet[rowId] === true,
+            active: rowId === active
+        });
+    }
+
+    rows.sort(function(a, b) {
+        var ra = schemaGroup(a);
+        var rb = schemaGroup(b);
+        if (ra !== rb) return ra - rb;
+        if (a.label < b.label) return -1;
+        if (a.label > b.label) return 1;
+        if (a.id < b.id) return -1;
+        if (a.id > b.id) return 1;
+        return 0;
+    });
     return rows;
+}
+
+// mergeIds unions id lists preserving order, dropping empties and duplicates.
+// Used to fold Rime's Enabled set into Bloom's without trusting either alone.
+function mergeIds(primary, secondary) {
+    var out = [];
+    var seen = {};
+    var lists = [primary, secondary];
+    for (var l = 0; l < lists.length; l++) {
+        if (!Array.isArray(lists[l])) continue;
+        for (var i = 0; i < lists[l].length; i++) {
+            var id = idOf(lists[l][i]);
+            if (id !== "" && seen[id] === undefined) {
+                seen[id] = true;
+                out.push(id);
+            }
+        }
+    }
+    return out;
+}
+
+// schemaGroup ranks a row: Active first, then Enabled, then Installed-disabled.
+function schemaGroup(row) {
+    if (row.active) return 0;
+    if (row.enabled) return 1;
+    return 2;
+}
+
+function idOf(value) {
+    return String(value === undefined || value === null ? "" : value);
 }
 
 // updates shapes `bloom --json update`. Returns null on a failed reply.

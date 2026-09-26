@@ -49,10 +49,10 @@ BarWidget {
     // open a terminal.
     readonly property bool bloomAvailable: backend.bloomAvailable
     readonly property bool bloomChecking: backend.bloomChecking
-    readonly property var bloomEnabledSchemas: backend.bloomEnabledSchemas
     readonly property var bloomPackages: backend.bloomPackages
     readonly property var bloomUpdates: backend.bloomUpdates
-    readonly property var bloomSchemas: backend.bloomSchemas
+    // The unified Schema List (Enabled ∪ Bloom-installed ∪ Active).
+    readonly property var schemaRows: backend.schemaRows
     readonly property int bloomUpdatesAvailable: backend.bloomUpdatesAvailable
     readonly property double bloomUpdatesAt: backend.bloomUpdatesAt
     readonly property string bloomError: backend.bloomError
@@ -163,18 +163,16 @@ BarWidget {
         onTriggered: backend.refresh()
     }
 
-    // Bloom reads are deliberately off the one-second fcitx5 poll: the list is
-    // a forked process and updates hit the network. This timer always runs so
-    // a Bloom installed after startup is still picked up (refreshBloom
-    // re-detects when it is unavailable).
+    // Bloom reads are deliberately off the one-second fcitx5 poll. This timer
+    // only refreshes the remote update check (the five-minute cache); the list
+    // and Schema state refresh on panel open, so a terminal-driven write
+    // converges on reopen rather than by polling (ADR 0006). It always runs so
+    // a Bloom installed after startup is still picked up.
     Timer {
         interval: root.bloomStaleAfter
         repeat: true
         running: true
-        onTriggered: {
-            backend.refreshBloom();
-            backend.refreshBloomUpdates();
-        }
+        onTriggered: backend.refreshBloomUpdates()
     }
 
     Loader {

@@ -16,7 +16,7 @@ vm.runInContext(
     source +
         "\nmodule.exports = { whichCommand, listCommand, listRegistryCommand, updateCommand, deployCommand, launchCommand, " +
         "enableCommand, disableCommand, installArgs, removeArgs, upgradeArgs, upgradeAllArgs, " +
-        "parse, errorMessage, list, registry, updates, schemas, packageLabel, stringArray, updateArray };",
+        "parse, errorMessage, list, registry, updates, schemas, mergeIds, packageLabel, stringArray, updateArray };",
     context,
 );
 const Bloom = context.module.exports;
@@ -142,26 +142,48 @@ test("registry returns null on failure and tolerates a missing list", () => {
     assert.deepEqual([...Bloom.registry('{"ok":true}').registry], []);
 });
 
-test("schemas unions enabled and installed package schemas", () => {
+test("schemas builds the unified list: active, then enabled, then installed-disabled", () => {
     const packages = [
-        { schemas: ["py"] },
-        { schemas: ["sno_ch_jp", "luna_pinyin"] },
+        { repo: "local/py", schemas: ["py"] },
+        { repo: "rime/rime-luna-pinyin", schemas: ["sno_ch_jp", "luna_pinyin"] },
     ];
-    const rows = Bloom.schemas(["sno_ch_jp", "japanese"], packages);
+    const labels = { sno_ch_jp: "中文", japanese: "日本語", py: "拼音", luna_pinyin: "朙月拼音" };
+    const rows = Bloom.schemas(["sno_ch_jp", "japanese"], packages, "sno_ch_jp", (id) => labels[id] || id);
     assert.deepEqual(
-        [...rows.map((r) => [r.id, r.enabled])],
+        [...rows.map((r) => [r.id, r.enabled, r.installed, r.owner, r.active])],
         [
-            ["japanese", true],
-            ["luna_pinyin", false],
-            ["py", false],
-            ["sno_ch_jp", true],
+            ["sno_ch_jp", true, true, "rime/rime-luna-pinyin", true],
+            ["japanese", true, false, "", false],
+            ["py", false, true, "local/py", false],
+            ["luna_pinyin", false, true, "rime/rime-luna-pinyin", false],
         ],
     );
 });
 
+test("schemas keeps an Active-but-not-Enabled schema and marks it ownerless", () => {
+    const rows = Bloom.schemas(["a"], [], "ghost", (id) => id);
+    assert.deepEqual([...rows.map((r) => r.id)], ["ghost", "a"]);
+    assert.equal(rows[0].active, true);
+    assert.equal(rows[0].enabled, false);
+    assert.equal(rows[0].installed, false);
+});
+
+test("schemas: first owner wins and label falls back to the id", () => {
+    const rows = Bloom.schemas([], [{ repo: "a", schemas: ["x"] }, { repo: "b", schemas: ["x"] }], "", null);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].owner, "a");
+    assert.equal(rows[0].label, "x");
+});
+
+test("mergeIds unions preserving order and dropping empties", () => {
+    assert.deepEqual([...Bloom.mergeIds(["a", "", "b"], ["b", "c"])], ["a", "b", "c"]);
+    assert.deepEqual([...Bloom.mergeIds(null, ["x"])], ["x"]);
+    assert.deepEqual([...Bloom.mergeIds([], [])], []);
+});
+
 test("schemas is empty-safe", () => {
-    assert.deepEqual([...Bloom.schemas([], [])], []);
-    assert.deepEqual([...Bloom.schemas(null, null)], []);
+    assert.deepEqual([...Bloom.schemas([], [], "", null)], []);
+    assert.deepEqual([...Bloom.schemas(null, null, "", null)], []);
 });
 
 console.log(`${passed} checks passed`);

@@ -23,15 +23,49 @@ _Avoid_: input method, sub-method, mode
 The Schema Rime is currently typing with. Changed at runtime over fcitx5 D-Bus.
 _Avoid_: current schema, selected schema, enabled schema
 
+**Set Active**:
+To make a Schema the Active Schema. The only way to change what Rime types
+with. A Schema can be Active without being Enabled, but that lapses on the next
+redeploy.
+_Avoid_: activate, enable, switch to
+
 **Enabled Schema**:
 A Schema listed in Rime's `default.custom.yaml` `schema_list`, making it
 selectable at all. Managed by Bloom; independent of which Schema is Active.
 _Avoid_: available schema, installed schema, active schema
 
+**Enable** (and **Disable**):
+To add a Schema to, or remove it from, the Enabled list so it survives a
+redeploy. Managed by Bloom. Never used to mean Set Active.
+_Avoid_: activate, deactivate, install
+
 **Installed Package**:
 A Rime package Bloom has installed and tracks in `state.json`, along with the
 files and Schemas it owns.
 _Avoid_: schema, recipe
+
+**Installed Schema**:
+A Schema whose files are present in the Rime user directory, whether or not it
+is Enabled. Present because an Installed Package owns it, or because it was
+placed outside Bloom.
+_Avoid_: present schema, available schema
+
+**Owner Package**:
+The Installed Package whose `schemas` include a given Schema. Shown on a
+Schema List row to explain where the Schema came from.
+_Avoid_: source, provider
+
+**Ownerless Schema**:
+A Schema in the Schema List that no Installed Package owns — enabled by hand,
+or left behind by Bloom drift. It can be Enabled and Disabled, but not
+uninstalled.
+_Avoid_: orphan, dangling schema, untracked
+
+**Schema List**:
+The set of Schemas a surface offers: the Enabled Schemas, plus — when Bloom is
+available — the Schemas owned by Installed Packages. This is the most any
+surface can show, since fcitx5 exposes only the Enabled set.
+_Avoid_: all schemas, available schemas
 
 **Input Method Group**:
 An fcitx5 collection of Input Methods that can be switched among directly. Only
