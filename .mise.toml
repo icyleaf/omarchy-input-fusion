@@ -1,0 +1,63 @@
+# Input Fusion — local development tasks.
+#
+# Mirrors the omarchy-bitwarden plugin's dev-* workflow, adapted for a pure
+# QML/JS plugin: there is no binary to build, so "deploy" is just getting the
+# working tree into the installed plugin directory and restarting the shell.
+#
+# The installed plugin lives at ~/.config/omarchy/plugins/icyleaf.input-fusion.
+
+[tasks.test]
+description = "Run the Node unit tests for the JavaScript seams"
+run = "npm test"
+
+[tasks.version]
+description = "Show the plugin version"
+run = 'jq -r .version manifest.json'
+
+[tasks.bump]
+description = "Bump manifest.json version and create a bump commit"
+usage = '''
+arg "<version>" help="New plugin version, e.g. 2.1.0"
+'''
+run = '''
+VERSION="${usage_version}"
+sed -i -E "s/\"version\": .*/\"version\": \"$VERSION\",/" manifest.json
+git add manifest.json
+git commit -m "bump: input-fusion $VERSION"
+'''
+
+[tasks.dev-restart-omarchy]
+description = "Restart the Omarchy shell"
+run = "omarchy-restart-shell"
+
+# Deploy committed work straight from this checkout, with no GitHub round-trip:
+# the installed clone fetches the current branch from here and hard-resets to it.
+[tasks.dev-update-omarchy-plugin]
+description = "Sync the installed plugin from this checkout (committed work, no push)"
+run = '''
+DEV_REPO="$(git rev-parse --show-toplevel)"
+BRANCH="$(git -C "$DEV_REPO" branch --show-current)"
+DEST="$HOME/.config/omarchy/plugins/icyleaf.input-fusion"
+[ -d "$DEST/.git" ] || { echo "not a git clone: $DEST"; exit 1; }
+git -C "$DEST" fetch "$DEV_REPO" "$BRANCH"
+git -C "$DEST" checkout -f -B "$BRANCH" FETCH_HEAD
+git -C "$DEST" reset --hard FETCH_HEAD
+echo "Deployed $BRANCH@$(git -C "$DEST" rev-parse --short HEAD) -> $DEST"
+'''
+
+# Fast iteration: copy the working tree (uncommitted changes included) over the
+# installed plugin with rsync. This leaves the installed clone dirty, so use
+# dev-deploy (git) when you want the clean, tracked path.
+[tasks.dev-sync]
+description = "Copy this working tree (incl. uncommitted) into the installed plugin"
+run = '''
+DEST="$HOME/.config/omarchy/plugins/icyleaf.input-fusion"
+mkdir -p "$DEST"
+rsync -a --delete --exclude '.git' --exclude 'node_modules' --exclude 'dist' ./ "$DEST/"
+echo "Synced $(pwd) -> $DEST"
+'''
+
+[tasks.dev-deploy]
+description = "Deploy this checkout to the installed plugin and restart the shell"
+depends = ["dev-update-omarchy-plugin"]
+depends_post = ["dev-restart-omarchy"]

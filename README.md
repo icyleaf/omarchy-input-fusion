@@ -132,6 +132,33 @@ omarchy plugin enable icyleaf.input-fusion
 
 ---
 
+## 🧑💻 Local Development
+
+The repo ships [`mise`](https://mise.jdx.dev/) tasks (`.mise.toml`), mirroring
+the `omarchy-bitwarden` plugin's `dev-*` workflow. The installed plugin is a
+git clone at `~/.config/omarchy/plugins/icyleaf.input-fusion`; these tasks push
+your checkout into it and restart the shell.
+
+```bash
+mise run test          # Node unit tests for the JS seams
+mise run version       # plugin version from manifest.json
+
+# Deploy committed work from this checkout (no GitHub push needed): the
+# installed clone fetches this branch from here and hard-resets to it.
+mise run dev-deploy
+
+# Fast iteration including uncommitted changes (rsync; leaves the installed
+# clone dirty, so prefer dev-deploy for the clean tracked path).
+mise run dev-sync
+mise run dev-restart-omarchy
+```
+
+Detection of the optional `bloom` binary is `command -v bloom` under the
+shell's `PATH`; if `~/.local/bin` is on the shell's path (it is on Omarchy),
+the Bloom section appears automatically.
+
+---
+
 ## ⌨️ Usage & Keybinding
 
 ### Toggle the Overlay
