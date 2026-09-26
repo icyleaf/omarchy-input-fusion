@@ -14,7 +14,9 @@ const context = { module: { exports: {} }, console, JSON, Array, Number, String,
 vm.createContext(context);
 vm.runInContext(
     source +
-        "\nmodule.exports = { whichCommand, listCommand, updateCommand, parse, errorMessage, list, updates, packageLabel, stringArray, updateArray };",
+        "\nmodule.exports = { whichCommand, listCommand, listRegistryCommand, updateCommand, deployCommand, launchCommand, " +
+        "enableCommand, disableCommand, installArgs, removeArgs, upgradeArgs, upgradeAllArgs, " +
+        "parse, errorMessage, list, registry, updates, schemas, packageLabel, stringArray, updateArray };",
     context,
 );
 const Bloom = context.module.exports;
@@ -100,6 +102,66 @@ test("packageLabel strips the local/ scan prefix", () => {
     assert.equal(Bloom.packageLabel("local/py"), "py");
     assert.equal(Bloom.packageLabel("rime/rime-luna-pinyin"), "rime/rime-luna-pinyin");
     assert.equal(Bloom.packageLabel(""), "");
+});
+
+test("registry and write command builders", () => {
+    assert.deepEqual([...Bloom.listRegistryCommand()], ["bloom", "--json", "list", "-r"]);
+    assert.deepEqual([...Bloom.enableCommand("py")], ["bloom", "--json", "enable", "py"]);
+    assert.deepEqual([...Bloom.disableCommand("py")], ["bloom", "--json", "disable", "py"]);
+    assert.deepEqual([...Bloom.installArgs("rime/py")], ["bloom", "install", "rime/py"]);
+    assert.deepEqual([...Bloom.removeArgs("rime/py")], ["bloom", "remove", "rime/py"]);
+    assert.deepEqual([...Bloom.upgradeArgs("rime/py")], ["bloom", "upgrade", "rime/py"]);
+    assert.deepEqual([...Bloom.upgradeAllArgs()], ["bloom", "upgrade"]);
+    assert.deepEqual([...Bloom.deployCommand()], ["bloom", "--json", "deploy"]);
+});
+
+test("launchCommand wraps a bloom argv in the floating-terminal launcher", () => {
+    assert.deepEqual(
+        [...Bloom.launchCommand(Bloom.upgradeArgs("rime/py"))],
+        ["omarchy-launch-floating-terminal-with-presentation", "bloom", "upgrade", "rime/py"],
+    );
+});
+
+test("registry shapes entries and marks installed", () => {
+    const raw = JSON.stringify({
+        ok: true,
+        registry: [
+            { name: "luna-pinyin", repo: "rime/rime-luna-pinyin", description: "Luna", installed: true },
+            { name: "cangjie", repo: "rime/rime-cangjie", description: "Cangjie", installed: false },
+        ],
+    });
+    const data = Bloom.registry(raw);
+    assert.equal(data.registry.length, 2);
+    assert.equal(data.registry[0].installed, true);
+    assert.equal(data.registry[1].installed, false);
+    assert.equal(data.registry[1].repo, "rime/rime-cangjie");
+});
+
+test("registry returns null on failure and tolerates a missing list", () => {
+    assert.equal(Bloom.registry('{"ok":false,"error":"nope"}'), null);
+    assert.deepEqual([...Bloom.registry('{"ok":true}').registry], []);
+});
+
+test("schemas unions enabled and installed package schemas", () => {
+    const packages = [
+        { schemas: ["py"] },
+        { schemas: ["sno_ch_jp", "luna_pinyin"] },
+    ];
+    const rows = Bloom.schemas(["sno_ch_jp", "japanese"], packages);
+    assert.deepEqual(
+        [...rows.map((r) => [r.id, r.enabled])],
+        [
+            ["japanese", true],
+            ["luna_pinyin", false],
+            ["py", false],
+            ["sno_ch_jp", true],
+        ],
+    );
+});
+
+test("schemas is empty-safe", () => {
+    assert.deepEqual([...Bloom.schemas([], [])], []);
+    assert.deepEqual([...Bloom.schemas(null, null)], []);
 });
 
 console.log(`${passed} checks passed`);

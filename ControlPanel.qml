@@ -5,16 +5,17 @@ import qs.Ui
 import "i18n.js" as I18n
 import "BloomController.js" as Bloom
 
-// Control panel for the Hypr Input Switcher bar widget: two sections, Input
-// Method (fcitx5) and Rime Schema.
+// Control panel for the Input Fusion bar widget: the fcitx5 Input Method and
+// Rime Schema sections, plus the Bloom bridge (schemas, packages, updates).
 //
-// This panel holds no fcitx5 processes and reads no live state of its own.
+// This panel holds no processes and reads no live fcitx5 state of its own.
 // A focused layer-shell surface makes fcitx5 report and switch its own
 // transient input context instead of the focused application's, so anything
 // read here while open would be the panel's context, not the app's. The bar
 // widget owns all state and switching; the panel renders the widget's
 // snapshot and, on selection, closes first (releasing focus) and asks the
-// widget to apply the choice.
+// widget to apply the choice. Bloom is not shadowed, so its rows bind live to
+// the widget and call back through it to toggle a schema or open a terminal.
 Panel {
     id: root
 
@@ -56,14 +57,28 @@ Panel {
     readonly property var bloomEnabledSchemas: root.hostWidget ? root.hostWidget.bloomEnabledSchemas : []
     readonly property var bloomPackages: root.hostWidget ? root.hostWidget.bloomPackages : []
     readonly property var bloomUpdates: root.hostWidget ? root.hostWidget.bloomUpdates : []
+    readonly property var bloomSchemas: root.hostWidget ? root.hostWidget.bloomSchemas : []
     readonly property int bloomUpdatesAvailable: root.hostWidget ? root.hostWidget.bloomUpdatesAvailable : -1
     readonly property double bloomUpdatesAt: root.hostWidget ? root.hostWidget.bloomUpdatesAt : 0
     readonly property string bloomError: root.hostWidget ? root.hostWidget.bloomError : ""
+    readonly property bool bloomWriteRunning: root.hostWidget ? root.hostWidget.bloomWriteRunning : false
+    readonly property string bloomWriteError: root.hostWidget ? root.hostWidget.bloomWriteError : ""
 
     function bloomRefresh() {
         if (!root.hostWidget) return;
         root.hostWidget.refreshBloom();
         root.hostWidget.refreshBloomUpdates();
+    }
+
+    // Enable/disable run in-process through the widget's Backend.
+    function bloomToggle(schema, enabled) {
+        if (root.hostWidget) root.hostWidget.bloomToggleSchema(schema, enabled);
+    }
+
+    // Upgrade opens a floating terminal via the widget (the panel holds no
+    // processes of its own).
+    function bloomUpgrade(repo) {
+        if (root.hostWidget) root.hostWidget.bloomUpgrade(repo);
     }
 
     function takeSnapshot() {
@@ -197,7 +212,9 @@ Panel {
                             delegate: rowDelegate
                         }
 
-                        // --- Bloom (read-only) ----------------------------------
+                        // --- Bloom (read + write) -------------------------------
+                        // Schemas toggle in-process; packages and updates run
+                        // their heavy writes in a terminal (see Widget.launchBloom).
                         Column {
                             width: parent.width
                             visible: root.bloomVisible
@@ -211,7 +228,7 @@ Panel {
 
                             Text {
                                 width: parent.width
-                                text: root.tr("bloom_enabled_schemas")
+                                text: root.tr("bloom_schemas")
                                 color: root.panelForeground
                                 opacity: 0.58
                                 font.family: Style.font.family
@@ -221,7 +238,7 @@ Panel {
 
                             Text {
                                 width: parent.width
-                                visible: root.bloomEnabledSchemas.length === 0
+                                visible: root.bloomSchemas.length === 0
                                 text: root.tr("bloom_no_enabled")
                                 color: root.panelForeground
                                 opacity: 0.42
@@ -230,16 +247,8 @@ Panel {
                             }
 
                             Repeater {
-                                model: root.bloomEnabledSchemas
-                                delegate: Text {
-                                    required property var modelData
-                                    width: parent.width
-                                    text: "• " + modelData
-                                          + (root.snapshot.isRime && root.snapshot.schema === modelData ? "  ✓" : "")
-                                    color: root.panelForeground
-                                    font.family: Style.font.family
-                                    font.pixelSize: Style.font.body
-                                }
+                                model: root.bloomSchemas
+                                delegate: bloomSchemaDelegate
                             }
 
                             Text {
@@ -264,37 +273,7 @@ Panel {
 
                             Repeater {
                                 model: root.bloomPackages
-                                delegate: Column {
-                                    required property var modelData
-                                    width: parent.width
-                                    spacing: 0
-
-                                    Text {
-                                        width: parent.width
-                                        text: "• " + Bloom.packageLabel(modelData.repo)
-                                        color: root.panelForeground
-                                        font.family: Style.font.family
-                                        font.pixelSize: Style.font.body
-                                        elide: Text.ElideRight
-                                    }
-
-                                    Text {
-                                        width: parent.width
-                                        visible: sub !== ""
-                                        text: sub
-                                        color: root.panelForeground
-                                        opacity: 0.58
-                                        font.family: Style.font.family
-                                        font.pixelSize: Style.font.caption
-                                        elide: Text.ElideRight
-                                    }
-
-                                    readonly property string sub: {
-                                        var schemas = (modelData.schemas || []).join(", ");
-                                        if (schemas !== "" && modelData.version !== "") return schemas + " · " + modelData.version;
-                                        return schemas !== "" ? schemas : modelData.version;
-                                    }
-                                }
+                                delegate: bloomPackageDelegate
                             }
 
                             Text {
@@ -309,29 +288,22 @@ Panel {
 
                             Repeater {
                                 model: root.bloomUpdates
-                                delegate: Text {
-                                    required property var modelData
-                                    width: parent.width
-                                    visible: modelData.updateAvailable
-                                    text: "• " + Bloom.packageLabel(modelData.repo) + ": " + modelData.local + " → " + modelData.remote
-                                    color: root.panelForeground
-                                    font.family: Style.font.family
-                                    font.pixelSize: Style.font.caption
-                                    elide: Text.ElideRight
-                                }
+                                delegate: bloomUpdateDelegate
                             }
 
                             Text {
                                 width: parent.width
                                 text: {
+                                    if (root.bloomWriteError !== "") return root.bloomWriteError;
+                                    if (root.bloomWriteRunning) return root.tr("bloom_working");
                                     if (root.bloomError !== "") return root.bloomError;
                                     if (root.bloomChecking) return root.tr("bloom_checking");
                                     if (root.bloomUpdatesAvailable < 0) return root.tr("bloom_not_checked");
                                     if (root.bloomUpdatesAvailable === 0) return root.tr("bloom_up_to_date");
                                     return I18n.t("bloom_updates_available", root.bloomUpdatesAvailable);
                                 }
-                                color: root.bloomError !== "" ? Color.accent : root.panelForeground
-                                opacity: root.bloomError !== "" ? 1.0 : 0.58
+                                color: (root.bloomError !== "" || root.bloomWriteError !== "") ? Color.accent : root.panelForeground
+                                opacity: (root.bloomError !== "" || root.bloomWriteError !== "") ? 1.0 : 0.58
                                 font.family: Style.font.family
                                 font.pixelSize: Style.font.caption
                                 wrapMode: Text.WordWrap
@@ -466,6 +438,150 @@ Panel {
                     root.cursor = row.modelData.global;
                     root.activate(row.modelData);
                 }
+            }
+        }
+    }
+
+    // Bloom schema row: click toggles enable/disable (in-process).
+    Component {
+        id: bloomSchemaDelegate
+
+        Rectangle {
+            id: schemaRow
+            required property var modelData
+
+            width: parent.width
+            height: Style.space(30)
+            radius: Style.cornerRadius
+            color: schemaMouse.containsMouse ? Style.hoverFillFor(root.panelForeground, root.panelAccent) : "transparent"
+            opacity: root.bloomWriteRunning ? 0.55 : 1.0
+
+            Row {
+                anchors.fill: parent
+                anchors.leftMargin: Style.spacing.rowPaddingX
+                anchors.rightMargin: Style.spacing.rowPaddingX
+                spacing: Style.spacing.controlGap
+
+                Text {
+                    width: Style.space(20)
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: schemaRow.modelData.enabled ? "✓" : "○"
+                    color: schemaRow.modelData.enabled ? Color.accent : root.panelForeground
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.body
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width - Style.space(20) - Style.spacing.controlGap
+                    text: schemaRow.modelData.id
+                    color: root.panelForeground
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.body
+                    elide: Text.ElideRight
+                }
+            }
+
+            MouseArea {
+                id: schemaMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                enabled: !root.bloomWriteRunning
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.bloomToggle(schemaRow.modelData.id, !schemaRow.modelData.enabled)
+            }
+        }
+    }
+
+    // Bloom package row: click upgrades it in a floating terminal.
+    Component {
+        id: bloomPackageDelegate
+
+        Rectangle {
+            id: packageRow
+            required property var modelData
+
+            width: parent.width
+            height: Style.space(34)
+            radius: Style.cornerRadius
+            color: packageMouse.containsMouse ? Style.hoverFillFor(root.panelForeground, root.panelAccent) : "transparent"
+
+            Column {
+                anchors.fill: parent
+                anchors.leftMargin: Style.spacing.rowPaddingX
+                anchors.rightMargin: Style.spacing.rowPaddingX
+                spacing: 0
+
+                Text {
+                    width: parent.width
+                    text: "• " + Bloom.packageLabel(packageRow.modelData.repo)
+                    color: root.panelForeground
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.body
+                    elide: Text.ElideRight
+                }
+
+                Text {
+                    width: parent.width
+                    visible: sub !== ""
+                    text: sub
+                    color: root.panelForeground
+                    opacity: 0.58
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                    elide: Text.ElideRight
+
+                    readonly property string sub: {
+                        var schemas = (packageRow.modelData.schemas || []).join(", ");
+                        if (schemas !== "" && packageRow.modelData.version !== "") return schemas + " · " + packageRow.modelData.version;
+                        return schemas !== "" ? schemas : packageRow.modelData.version;
+                    }
+                }
+            }
+
+            MouseArea {
+                id: packageMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.bloomUpgrade(packageRow.modelData.repo)
+            }
+        }
+    }
+
+    // Bloom update row: click upgrades it in a floating terminal.
+    Component {
+        id: bloomUpdateDelegate
+
+        Rectangle {
+            id: updateRow
+            required property var modelData
+
+            width: parent.width
+            height: Style.space(30)
+            radius: Style.cornerRadius
+            visible: modelData.updateAvailable
+            color: updateMouse.containsMouse ? Style.hoverFillFor(root.panelForeground, root.panelAccent) : "transparent"
+
+            Text {
+                anchors.fill: parent
+                anchors.leftMargin: Style.spacing.rowPaddingX
+                anchors.rightMargin: Style.spacing.rowPaddingX
+                verticalAlignment: Text.AlignVCenter
+                text: "↑ " + Bloom.packageLabel(updateRow.modelData.repo) + ": " + updateRow.modelData.local + " → " + updateRow.modelData.remote
+                color: root.panelForeground
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                elide: Text.ElideRight
+            }
+
+            MouseArea {
+                id: updateMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.bloomUpgrade(updateRow.modelData.repo)
             }
         }
     }

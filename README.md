@@ -5,7 +5,7 @@ A live input-method bar widget and a control panel for **Omarchy 4.0+
 switches them straight from the bar, and it fuses two engines around that core:
 
 - **`bloom`** — Rime schema / package management (which Schemas are enabled and
-  installed). _Bridge: read-only in the bar panel._
+  installed). _Bridge: the bar panel and the Overlay's Bloom tab._
 - **`hypr-input-switcher`** — automatic switching by window and layer rules.
   _Bridge: the Overlay below._
 
@@ -47,23 +47,31 @@ The whole plugin is **pure Quickshell & JavaScript** — no Python.
 > The `hypr-input-switcher` daemon keeps doing the automatic switching; the
 > plugin only edits its configuration and shows its state.
 
-### Bloom bridge (read-only)
+### Bloom bridge
 
-When the `bloom` binary is on `PATH`, the control panel grows a third,
-read-only section:
+When the `bloom` binary is on `PATH`, the control panel grows a third section
+and the Overlay a third tab. All reads go through `bloom --json …` (see ADR
+0005); the plugin never parses Bloom's formatted text.
 
-- 📦 **Enabled Schemas** — the Schema list from `default.custom.yaml`; the
-  Active Schema is ticked.
-- 🧩 **Installed Packages** — each package tracked in Bloom's `state.json`,
-  with its Schemas and version.
+**Bar panel** — compact and click-driven:
+
+- 🔁 **Schemas** — every Schema of the Installed Packages, ticked when enabled;
+  a click enables/disables it in-process (`bloom enable` / `disable`).
+- 🧩 **Installed Packages** — click a package to upgrade it.
 - ⬆️ **Updates** — packages whose remote `HEAD` differs, refreshed on a
-  five-minute cache and on demand, never on the one-second fcitx5 poll.
+  five-minute cache and on demand, never on the one-second fcitx5 poll; click
+  to upgrade.
 
-Reads go through `bloom --json …` (see ADR 0005); the plugin never parses
-Bloom's formatted text. Mutations — enable, disable, install, remove, upgrade —
-arrive in a later phase and run in a terminal rather than inside the shell
-process. Without `bloom` installed the panel quietly falls back to its two
-fcitx5 sections.
+**Overlay — Bloom tab** — the full management surface:
+
+- Browse the **Registry** and Install/Remove packages.
+- **Upgrade** or Remove installed packages.
+- **Upgrade All** from the update list.
+
+Heavy writes (install, upgrade, remove) open a floating terminal and run
+`bloom` there, never inside the shell process; enable/disable are fast enough
+to run in-process (ADR 0003). Without `bloom` installed the panel quietly
+falls back to its two fcitx5 sections and the tab reports it as missing.
 
 ---
 

@@ -65,8 +65,9 @@ _Avoid_: overlay rule, namespace rule
 
 **Bloom Bridge**:
 The optional part of the plugin that surfaces Bloom's Enabled Schemas,
-Installed Packages, and updates. Reads state through `bloom --json`; mutations
-run Bloom in a terminal rather than inside the shell process.
+Installed Packages, and updates. Reads state through `bloom --json`. Fast
+writes (enable, disable, deploy) run in-process; heavy writes (install,
+upgrade, remove) run Bloom in a terminal rather than inside the shell process.
 _Avoid_: bloom plugin, schema manager
 
 **Rule Bridge**:

@@ -3,6 +3,7 @@ import Quickshell
 import qs.Commons
 import qs.Ui
 import "i18n.js" as I18n
+import "BloomController.js" as Bloom
 
 // Omarchy bar widget for Input Fusion: the live fcitx5 Input Method / Rime
 // Schema indicator. Left click opens the control panel; middle click opens the
@@ -44,15 +45,19 @@ BarWidget {
     // Set by the panel while it is open.
     readonly property bool panelOpen: panelLoader.item ? panelLoader.item.opened === true : false
 
-    // Bloom is read-only here; the panel binds to these and never writes.
+    // The panel binds to these; schema toggles write in-process, heavy writes
+    // open a terminal.
     readonly property bool bloomAvailable: backend.bloomAvailable
     readonly property bool bloomChecking: backend.bloomChecking
     readonly property var bloomEnabledSchemas: backend.bloomEnabledSchemas
     readonly property var bloomPackages: backend.bloomPackages
     readonly property var bloomUpdates: backend.bloomUpdates
+    readonly property var bloomSchemas: backend.bloomSchemas
     readonly property int bloomUpdatesAvailable: backend.bloomUpdatesAvailable
     readonly property double bloomUpdatesAt: backend.bloomUpdatesAt
     readonly property string bloomError: backend.bloomError
+    readonly property bool bloomWriteRunning: backend.bloomWriteRunning
+    readonly property string bloomWriteError: backend.bloomWriteError
 
     readonly property string label: {
         if (backend.active) {
@@ -103,7 +108,7 @@ BarWidget {
 
     // A cached update check is reused until it is five minutes old, so opening
     // the panel does not hammer `git ls-remote`.
-    readonly property double bloomStaleAfter: 5 * 60 * 1000
+    readonly property double bloomStaleAfter: Bloom.staleAfterMs
 
     function refreshBloomIfStale() {
         backend.refreshBloom();
@@ -113,6 +118,14 @@ BarWidget {
 
     function refreshBloom() { backend.refreshBloom(); }
     function refreshBloomUpdates() { backend.refreshBloomUpdates(); }
+
+    // Enable/disable run in-process (fast, safe); upgrade opens a floating
+    // terminal, never the shell process. See ADR 0003.
+    function bloomToggleSchema(schema, enabled) { backend.setSchemaEnabled(schema, enabled); }
+
+    function bloomUpgrade(repo) {
+        Quickshell.execDetached(Bloom.launchCommand(Bloom.upgradeArgs(repo)));
+    }
 
     function close() {
         if (panelLoader.item) panelLoader.item.close();

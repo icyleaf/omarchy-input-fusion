@@ -78,7 +78,6 @@ var translations = {
         "state_direct": "Direct mode — fcitx5 is deactivated",
         "switch_failed": "Could not switch input method or schema",
         "section_bloom": "Bloom",
-        "bloom_enabled_schemas": "Enabled Schemas",
         "bloom_packages": "Installed Packages",
         "bloom_updates": "Updates",
         "bloom_no_enabled": "No schemas enabled",
@@ -88,7 +87,22 @@ var translations = {
         "bloom_not_checked": "Updates not checked",
         "bloom_checking": "Checking…",
         "bloom_refresh": "Refresh",
-        "bloom_unreadable": "Could not read Bloom output"
+        "bloom_redeploy": "Redeploy Rime",
+        "bloom_unreadable": "Could not read Bloom output",
+        "bloom_schemas": "Schemas (click to toggle)",
+        "bloom_working": "Working…",
+        "bloom_write_failed": "Bloom action failed",
+        "tab_bloom": "🌸 Bloom",
+        "bloom_registry": "Registry",
+        "bloom_registry_hint": "Install or remove packages (opens a terminal)",
+        "bloom_installed_hint": "Upgrade or remove installed packages (opens a terminal)",
+        "bloom_upgrade_all": "Upgrade All",
+        "bloom_install": "Install",
+        "bloom_remove": "Remove",
+        "bloom_upgrade": "Upgrade",
+        "bloom_not_detected": "Bloom is not installed or not on PATH",
+        "bloom_empty_registry": "No registry entries",
+        "bloom_up_to_date_all": "All packages are up to date"
     },
     "zh": {
         "title": "Hypr Input Switcher",
@@ -165,7 +179,6 @@ var translations = {
         "state_direct": "直通模式 — fcitx5 已关闭",
         "switch_failed": "无法切换输入法或方案",
         "section_bloom": "Bloom",
-        "bloom_enabled_schemas": "已启用方案",
         "bloom_packages": "已安装包",
         "bloom_updates": "更新",
         "bloom_no_enabled": "未启用任何方案",
@@ -175,7 +188,22 @@ var translations = {
         "bloom_not_checked": "尚未检查更新",
         "bloom_checking": "检查中…",
         "bloom_refresh": "刷新",
-        "bloom_unreadable": "无法读取 Bloom 输出"
+        "bloom_redeploy": "重载 Rime",
+        "bloom_unreadable": "无法读取 Bloom 输出",
+        "bloom_schemas": "方案（点击切换）",
+        "bloom_working": "处理中…",
+        "bloom_write_failed": "Bloom 操作失败",
+        "tab_bloom": "🌸 Bloom",
+        "bloom_registry": "可安装清单",
+        "bloom_registry_hint": "安装或移除包（会打开终端）",
+        "bloom_installed_hint": "升级或移除已安装包（会打开终端）",
+        "bloom_upgrade_all": "全部升级",
+        "bloom_install": "安装",
+        "bloom_remove": "移除",
+        "bloom_upgrade": "升级",
+        "bloom_not_detected": "未检测到 Bloom（未安装或不在 PATH）",
+        "bloom_empty_registry": "清单为空",
+        "bloom_up_to_date_all": "所有包均为最新"
     }
 };
 

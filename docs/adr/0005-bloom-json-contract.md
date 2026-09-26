@@ -15,9 +15,10 @@ an `error` string (still exiting non-zero). The plugin shells out to
 ## Status
 
 The read commands — `list`, `list --registry`, `update`, `doctor`, `version` —
-emit JSON. The mutating commands do too, but the plugin does not call them yet;
-writes land in a later phase and run in a terminal, not inside the shell
-process.
+emit JSON, as do the writes. The plugin uses two of them in-process:
+`enable`/`disable` (fast, patch `default.custom.yaml` and redeploy). It builds
+the argv for `install`/`upgrade`/`remove` but runs those in a floating terminal
+(ADR 0003), so their JSON is for scripts rather than the plugin.
 
 ## Consequences
 

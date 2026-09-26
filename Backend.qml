@@ -41,19 +41,27 @@ Item {
     property string lastError: ""
     property var configData: ({})
 
-    // --- Bloom bridge (read-only) -------------------------------------------
-    // Bloom is an optional external engine; the plugin shows its state but
-    // never mutates it here. Reads run on a slow cadence and on demand, not on
-    // the fcitx5 poll, because `bloom list` may touch the network.
+    // --- Bloom bridge -------------------------------------------------------
+    // Bloom is an optional external engine. Reads run on a slow cadence and on
+    // demand, not on the fcitx5 poll, because `bloom list` may touch the
+    // network. The only writes here are the fast, safe ones (enable, disable,
+    // deploy); install/upgrade/remove are launched in a terminal by the UI.
     property bool bloomAvailable: false
     property bool bloomChecking: false
+    // Set when a registry/update read is asked for before Bloom detection has
+    // finished; replayed once the binary is confirmed present.
+    property bool bloomRegistryPending: false
+    property bool bloomUpdatesPending: false
     property var bloomEnabledSchemas: []
     property var bloomPackages: []
     property var bloomUpdates: []
+    property var bloomRegistry: []
     property int bloomUpdatesAvailable: -1  // -1 until a check has run
     property double bloomCheckedAt: 0
     property double bloomUpdatesAt: 0
     property string bloomError: ""
+    property bool bloomWriteRunning: false
+    property string bloomWriteError: ""
 
     readonly property bool unavailable: backend.state === 0
     readonly property bool direct: backend.state === 1
@@ -92,8 +100,48 @@ Item {
     // Remote update checks hit `git ls-remote`, so they run strictly on demand
     // or on a long timer, never on every panel open.
     function refreshBloomUpdates() {
-        if (!backend.bloomAvailable) return;
+        if (!backend.bloomAvailable) {
+            backend.bloomUpdatesPending = true;
+            backend.detectBloom();
+            return;
+        }
+        backend.bloomUpdatesPending = false;
         if (!pBloomUpdate.running) pBloomUpdate.running = true;
+    }
+
+    function refreshBloomRegistry() {
+        if (!backend.bloomAvailable) {
+            backend.bloomRegistryPending = true;
+            backend.detectBloom();
+            return;
+        }
+        backend.bloomRegistryPending = false;
+        if (!pBloomRegistry.running) pBloomRegistry.running = true;
+    }
+
+    // Enabled Schemas ∪ schemas owned by Installed Packages, so an
+    // installed-but-disabled schema can still be re-enabled from the panel.
+    readonly property var bloomSchemas: Bloom.schemas(backend.bloomEnabledSchemas, backend.bloomPackages)
+
+    // Enable/disable patch default.custom.yaml and redeploy: fast and safe
+    // enough to run in the shell process.
+    function setSchemaEnabled(schema, enabled) {
+        backend.runBloomWrite(enabled ? Bloom.enableCommand(schema) : Bloom.disableCommand(schema));
+    }
+
+    // A plain redeploy, for applying changes made outside the plugin.
+    function redeployBloom() {
+        backend.runBloomWrite(Bloom.deployCommand());
+    }
+
+    // install/upgrade/remove never reach here; the UI launches them in a
+    // terminal. This is the shared path for the fast in-process writes.
+    function runBloomWrite(command) {
+        if (!backend.bloomAvailable || !command || command.length === 0) return;
+        backend.bloomWriteRunning = true;
+        backend.bloomWriteError = "";
+        pBloomWrite.command = command;
+        pBloomWrite.running = true;
     }
 
     readonly property bool planActive: backend.opPlan !== null
@@ -184,7 +232,11 @@ Item {
         command: Bloom.whichCommand()
         onExited: (code, status) => {
             backend.bloomAvailable = (code === 0);
-            if (backend.bloomAvailable) backend.refreshBloom();
+            if (!backend.bloomAvailable) return;
+            // Replay any read that was asked for before detection finished.
+            backend.refreshBloom();
+            if (backend.bloomRegistryPending) backend.refreshBloomRegistry();
+            if (backend.bloomUpdatesPending) backend.refreshBloomUpdates();
         }
     }
 
@@ -208,6 +260,41 @@ Item {
         onExited: (code, status) => {
             backend.bloomChecking = false;
             backend.bloomCheckedAt = Date.now();
+        }
+    }
+
+    Process {
+        id: pBloomRegistry
+        command: Bloom.listRegistryCommand()
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var data = Bloom.registry(text);
+                if (data) {
+                    backend.bloomRegistry = data.registry;
+                } else {
+                    backend.bloomError = Bloom.errorMessage(text) || I18n.t("bloom_unreadable");
+                }
+            }
+        }
+    }
+
+    Process {
+        id: pBloomWrite
+        command: []
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var obj = Bloom.parse(text);
+                if (!obj || obj.ok !== true)
+                    backend.bloomWriteError = Bloom.errorMessage(text) || I18n.t("bloom_write_failed");
+            }
+        }
+        onExited: (code, status) => {
+            backend.bloomWriteRunning = false;
+            if (code !== 0 && backend.bloomWriteError === "")
+                backend.bloomWriteError = I18n.t("bloom_write_failed");
+            backend.refreshBloom();
         }
     }
 
