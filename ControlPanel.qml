@@ -3,6 +3,7 @@ import Quickshell
 import qs.Commons
 import qs.Ui
 import "i18n.js" as I18n
+import "BloomController.js" as Bloom
 
 // Control panel for the Hypr Input Switcher bar widget: two sections, Input
 // Method (fcitx5) and Rime Schema.
@@ -46,6 +47,24 @@ Panel {
     property var inputRows: []
     property var rimeRows: []
     property int cursor: 0
+
+    // --- Bloom bridge (read-only) -------------------------------------------
+    // Unlike fcitx5, Bloom is not shadowed by the panel's keyboard focus, so
+    // these bind live to the widget and may update while the panel is open.
+    readonly property bool bloomVisible: root.hostWidget ? root.hostWidget.bloomAvailable : false
+    readonly property bool bloomChecking: root.hostWidget ? root.hostWidget.bloomChecking : false
+    readonly property var bloomEnabledSchemas: root.hostWidget ? root.hostWidget.bloomEnabledSchemas : []
+    readonly property var bloomPackages: root.hostWidget ? root.hostWidget.bloomPackages : []
+    readonly property var bloomUpdates: root.hostWidget ? root.hostWidget.bloomUpdates : []
+    readonly property int bloomUpdatesAvailable: root.hostWidget ? root.hostWidget.bloomUpdatesAvailable : -1
+    readonly property double bloomUpdatesAt: root.hostWidget ? root.hostWidget.bloomUpdatesAt : 0
+    readonly property string bloomError: root.hostWidget ? root.hostWidget.bloomError : ""
+
+    function bloomRefresh() {
+        if (!root.hostWidget) return;
+        root.hostWidget.refreshBloom();
+        root.hostWidget.refreshBloomUpdates();
+    }
 
     function takeSnapshot() {
         if (!root.hostWidget) return;
@@ -176,6 +195,165 @@ Panel {
                         Repeater {
                             model: root.rimeRows
                             delegate: rowDelegate
+                        }
+
+                        // --- Bloom (read-only) ----------------------------------
+                        Column {
+                            width: parent.width
+                            visible: root.bloomVisible
+                            spacing: Style.space(6)
+
+                            PanelSectionHeader {
+                                width: parent.width
+                                foreground: root.panelForeground
+                                text: root.tr("section_bloom")
+                            }
+
+                            Text {
+                                width: parent.width
+                                text: root.tr("bloom_enabled_schemas")
+                                color: root.panelForeground
+                                opacity: 0.58
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption
+                                font.bold: true
+                            }
+
+                            Text {
+                                width: parent.width
+                                visible: root.bloomEnabledSchemas.length === 0
+                                text: root.tr("bloom_no_enabled")
+                                color: root.panelForeground
+                                opacity: 0.42
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption
+                            }
+
+                            Repeater {
+                                model: root.bloomEnabledSchemas
+                                delegate: Text {
+                                    required property var modelData
+                                    width: parent.width
+                                    text: "• " + modelData
+                                          + (root.snapshot.isRime && root.snapshot.schema === modelData ? "  ✓" : "")
+                                    color: root.panelForeground
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.body
+                                }
+                            }
+
+                            Text {
+                                width: parent.width
+                                text: root.tr("bloom_packages")
+                                color: root.panelForeground
+                                opacity: 0.58
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption
+                                font.bold: true
+                            }
+
+                            Text {
+                                width: parent.width
+                                visible: root.bloomPackages.length === 0
+                                text: root.tr("bloom_no_packages")
+                                color: root.panelForeground
+                                opacity: 0.42
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption
+                            }
+
+                            Repeater {
+                                model: root.bloomPackages
+                                delegate: Column {
+                                    required property var modelData
+                                    width: parent.width
+                                    spacing: 0
+
+                                    Text {
+                                        width: parent.width
+                                        text: "• " + Bloom.packageLabel(modelData.repo)
+                                        color: root.panelForeground
+                                        font.family: Style.font.family
+                                        font.pixelSize: Style.font.body
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Text {
+                                        width: parent.width
+                                        visible: sub !== ""
+                                        text: sub
+                                        color: root.panelForeground
+                                        opacity: 0.58
+                                        font.family: Style.font.family
+                                        font.pixelSize: Style.font.caption
+                                        elide: Text.ElideRight
+                                    }
+
+                                    readonly property string sub: {
+                                        var schemas = (modelData.schemas || []).join(", ");
+                                        if (schemas !== "" && modelData.version !== "") return schemas + " · " + modelData.version;
+                                        return schemas !== "" ? schemas : modelData.version;
+                                    }
+                                }
+                            }
+
+                            Text {
+                                width: parent.width
+                                text: root.tr("bloom_updates")
+                                color: root.panelForeground
+                                opacity: 0.58
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption
+                                font.bold: true
+                            }
+
+                            Repeater {
+                                model: root.bloomUpdates
+                                delegate: Text {
+                                    required property var modelData
+                                    width: parent.width
+                                    visible: modelData.updateAvailable
+                                    text: "• " + Bloom.packageLabel(modelData.repo) + ": " + modelData.local + " → " + modelData.remote
+                                    color: root.panelForeground
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            Text {
+                                width: parent.width
+                                text: {
+                                    if (root.bloomError !== "") return root.bloomError;
+                                    if (root.bloomChecking) return root.tr("bloom_checking");
+                                    if (root.bloomUpdatesAvailable < 0) return root.tr("bloom_not_checked");
+                                    if (root.bloomUpdatesAvailable === 0) return root.tr("bloom_up_to_date");
+                                    return I18n.t("bloom_updates_available", root.bloomUpdatesAvailable);
+                                }
+                                color: root.bloomError !== "" ? Color.accent : root.panelForeground
+                                opacity: root.bloomError !== "" ? 1.0 : 0.58
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption
+                                wrapMode: Text.WordWrap
+                            }
+
+                            Text {
+                                id: bloomRefreshLabel
+                                width: parent.width
+                                text: "↻ " + root.tr("bloom_refresh")
+                                color: root.panelAccent
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption
+                                opacity: bloomRefreshMouse.containsMouse ? 1.0 : 0.75
+
+                                MouseArea {
+                                    id: bloomRefreshMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.bloomRefresh()
+                                }
+                            }
                         }
 
                         Rectangle {

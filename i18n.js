@@ -76,7 +76,19 @@ var translations = {
         "daemon_hint": "Window rules may override a manual choice when you switch focus.",
         "fcitx_unavailable": "Fcitx5 is not running",
         "state_direct": "Direct mode — fcitx5 is deactivated",
-        "switch_failed": "Could not switch input method or schema"
+        "switch_failed": "Could not switch input method or schema",
+        "section_bloom": "Bloom",
+        "bloom_enabled_schemas": "Enabled Schemas",
+        "bloom_packages": "Installed Packages",
+        "bloom_updates": "Updates",
+        "bloom_no_enabled": "No schemas enabled",
+        "bloom_no_packages": "No packages tracked by Bloom",
+        "bloom_up_to_date": "Up to date",
+        "bloom_updates_available": "{0} update(s) available",
+        "bloom_not_checked": "Updates not checked",
+        "bloom_checking": "Checking…",
+        "bloom_refresh": "Refresh",
+        "bloom_unreadable": "Could not read Bloom output"
     },
     "zh": {
         "title": "Hypr Input Switcher",
@@ -151,7 +163,19 @@ var translations = {
         "daemon_hint": "切换窗口时,规则可能覆盖手动选择。",
         "fcitx_unavailable": "Fcitx5 未运行",
         "state_direct": "直通模式 — fcitx5 已关闭",
-        "switch_failed": "无法切换输入法或方案"
+        "switch_failed": "无法切换输入法或方案",
+        "section_bloom": "Bloom",
+        "bloom_enabled_schemas": "已启用方案",
+        "bloom_packages": "已安装包",
+        "bloom_updates": "更新",
+        "bloom_no_enabled": "未启用任何方案",
+        "bloom_no_packages": "Bloom 未跟踪任何包",
+        "bloom_up_to_date": "已是最新",
+        "bloom_updates_available": "{0} 个可用更新",
+        "bloom_not_checked": "尚未检查更新",
+        "bloom_checking": "检查中…",
+        "bloom_refresh": "刷新",
+        "bloom_unreadable": "无法读取 Bloom 输出"
     }
 };
 

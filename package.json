@@ -1,0 +1,9 @@
+{
+  "name": "omarchy-input-fusion",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Node unit tests for the Input Fusion JavaScript seams",
+  "scripts": {
+    "test": "node test/bloom_controller.test.mjs"
+  }
+}

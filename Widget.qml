@@ -44,6 +44,16 @@ BarWidget {
     // Set by the panel while it is open.
     readonly property bool panelOpen: panelLoader.item ? panelLoader.item.opened === true : false
 
+    // Bloom is read-only here; the panel binds to these and never writes.
+    readonly property bool bloomAvailable: backend.bloomAvailable
+    readonly property bool bloomChecking: backend.bloomChecking
+    readonly property var bloomEnabledSchemas: backend.bloomEnabledSchemas
+    readonly property var bloomPackages: backend.bloomPackages
+    readonly property var bloomUpdates: backend.bloomUpdates
+    readonly property int bloomUpdatesAvailable: backend.bloomUpdatesAvailable
+    readonly property double bloomUpdatesAt: backend.bloomUpdatesAt
+    readonly property string bloomError: backend.bloomError
+
     readonly property string label: {
         if (backend.active) {
             var base = backend.imSymbol || (backend.imDisplay ? backend.imDisplay.charAt(0) : "󰌌");
@@ -56,10 +66,18 @@ BarWidget {
     }
 
     readonly property string tooltip: {
-        if (backend.unavailable) return I18n.t("fcitx_unavailable");
-        if (backend.direct) return I18n.t("direct_label");
-        var base = backend.isRime ? backend.imDisplay + " · " + backend.schema : backend.imDisplay;
-        return backend.lastError !== "" ? base + " — " + backend.lastError : base;
+        var base;
+        if (backend.unavailable) base = I18n.t("fcitx_unavailable");
+        else if (backend.direct) base = I18n.t("direct_label");
+        else {
+            base = backend.isRime ? backend.imDisplay + " · " + backend.schema : backend.imDisplay;
+            if (backend.lastError !== "") base += " — " + backend.lastError;
+        }
+        // Bloom only touches the tooltip: a pending update is worth a glance
+        // without spending bar space on it.
+        if (backend.bloomAvailable && backend.bloomUpdatesAvailable > 0)
+            base += " · " + I18n.t("bloom_updates_available", backend.bloomUpdatesAvailable);
+        return base;
     }
 
     implicitWidth: button.implicitWidth
@@ -75,10 +93,26 @@ BarWidget {
     }
 
     function open() {
-        if (panelLoader.item) { panelLoader.item.open(); return; }
+        if (panelLoader.item) { panelLoader.item.open(); refreshBloomIfStale(); return; }
         panelLoader.active = true;
-        Qt.callLater(function() { if (panelLoader.item) panelLoader.item.open(); });
+        Qt.callLater(function() {
+            if (panelLoader.item) panelLoader.item.open();
+            refreshBloomIfStale();
+        });
     }
+
+    // A cached update check is reused until it is five minutes old, so opening
+    // the panel does not hammer `git ls-remote`.
+    readonly property double bloomStaleAfter: 5 * 60 * 1000
+
+    function refreshBloomIfStale() {
+        backend.refreshBloom();
+        if (backend.bloomUpdatesAt === 0 || (Date.now() - backend.bloomUpdatesAt) > root.bloomStaleAfter)
+            backend.refreshBloomUpdates();
+    }
+
+    function refreshBloom() { backend.refreshBloom(); }
+    function refreshBloomUpdates() { backend.refreshBloomUpdates(); }
 
     function close() {
         if (panelLoader.item) panelLoader.item.close();
@@ -106,6 +140,7 @@ BarWidget {
         // I18n is a shared-library singleton; seed the language once here.
         I18n.setLanguage(root.lang);
         backend.refresh();
+        backend.detectBloom();
     }
 
     Timer {
@@ -113,6 +148,20 @@ BarWidget {
         repeat: true
         running: !root.panelOpen && !backend.planActive
         onTriggered: backend.refresh()
+    }
+
+    // Bloom reads are deliberately off the one-second fcitx5 poll: the list is
+    // a forked process and updates hit the network. This timer always runs so
+    // a Bloom installed after startup is still picked up (refreshBloom
+    // re-detects when it is unavailable).
+    Timer {
+        interval: root.bloomStaleAfter
+        repeat: true
+        running: true
+        onTriggered: {
+            backend.refreshBloom();
+            backend.refreshBloomUpdates();
+        }
     }
 
     Loader {

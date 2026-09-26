@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "FcitxController.js" as Fcitx
+import "BloomController.js" as Bloom
 import "i18n.js" as I18n
 
 // The single owner of every backend process for Input Fusion. Callers read
@@ -40,6 +41,20 @@ Item {
     property string lastError: ""
     property var configData: ({})
 
+    // --- Bloom bridge (read-only) -------------------------------------------
+    // Bloom is an optional external engine; the plugin shows its state but
+    // never mutates it here. Reads run on a slow cadence and on demand, not on
+    // the fcitx5 poll, because `bloom list` may touch the network.
+    property bool bloomAvailable: false
+    property bool bloomChecking: false
+    property var bloomEnabledSchemas: []
+    property var bloomPackages: []
+    property var bloomUpdates: []
+    property int bloomUpdatesAvailable: -1  // -1 until a check has run
+    property double bloomCheckedAt: 0
+    property double bloomUpdatesAt: 0
+    property string bloomError: ""
+
     readonly property bool unavailable: backend.state === 0
     readonly property bool direct: backend.state === 1
     readonly property bool active: backend.state === 2
@@ -57,6 +72,28 @@ Item {
         if (!pSchema.running) pSchema.running = true;
         if (!pSchemas.running) pSchemas.running = true;
         if (!pDaemon.running) pDaemon.running = true;
+    }
+
+    // --- Bloom reads --------------------------------------------------------
+    // Detection is separate from reading so the section can appear only when
+    // the binary exists; a missing `bloom` leaves the panel a two-section one.
+    function detectBloom() {
+        if (!pBloomWhich.running) pBloomWhich.running = true;
+    }
+
+    function refreshBloom() {
+        if (!backend.bloomAvailable) { backend.detectBloom(); return; }
+        if (!pBloomList.running) {
+            backend.bloomChecking = true;
+            pBloomList.running = true;
+        }
+    }
+
+    // Remote update checks hit `git ls-remote`, so they run strictly on demand
+    // or on a long timer, never on every panel open.
+    function refreshBloomUpdates() {
+        if (!backend.bloomAvailable) return;
+        if (!pBloomUpdate.running) pBloomUpdate.running = true;
     }
 
     readonly property bool planActive: backend.opPlan !== null
@@ -140,6 +177,57 @@ Item {
         id: pDaemon
         command: ["pgrep", "-f", "hypr-input-switcher"]
         onExited: (code, status) => { backend.daemonRunning = (code === 0); }
+    }
+
+    Process {
+        id: pBloomWhich
+        command: Bloom.whichCommand()
+        onExited: (code, status) => {
+            backend.bloomAvailable = (code === 0);
+            if (backend.bloomAvailable) backend.refreshBloom();
+        }
+    }
+
+    Process {
+        id: pBloomList
+        command: Bloom.listCommand()
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var data = Bloom.list(text);
+                if (data) {
+                    backend.bloomEnabledSchemas = data.enabledSchemas;
+                    backend.bloomPackages = data.packages;
+                    if (data.updatesAvailable >= 0) backend.bloomUpdatesAvailable = data.updatesAvailable;
+                    backend.bloomError = "";
+                } else {
+                    backend.bloomError = Bloom.errorMessage(text) || I18n.t("bloom_unreadable");
+                }
+            }
+        }
+        onExited: (code, status) => {
+            backend.bloomChecking = false;
+            backend.bloomCheckedAt = Date.now();
+        }
+    }
+
+    Process {
+        id: pBloomUpdate
+        command: Bloom.updateCommand()
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var data = Bloom.updates(text);
+                if (data) {
+                    backend.bloomUpdates = data.updates;
+                    backend.bloomUpdatesAvailable = data.updatesAvailable;
+                    backend.bloomError = "";
+                } else {
+                    backend.bloomError = Bloom.errorMessage(text) || I18n.t("bloom_unreadable");
+                }
+            }
+        }
+        onExited: (code, status) => { backend.bloomUpdatesAt = Date.now(); }
     }
 
     // --- config labels ------------------------------------------------------

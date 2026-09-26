@@ -5,8 +5,9 @@ is typing with (a runtime fcitx5 property) and which Schemas and packages are
 installed and enabled (Bloom's domain). Reimplementing Bloom's recipe engine,
 YAML AST patching, and dependency tracing in QML/JavaScript would duplicate a
 mature Go implementation and its package state. So the plugin is a front end:
-it reads Bloom's own files for display, and runs the `bloom` binary for
-mutations. Automatic switching stays in the `hypr-input-switcher` daemon, which
+it reads Bloom's state through `bloom --json` for display (see ADR 0005), and
+runs the `bloom` binary for mutations. Automatic switching stays in the
+`hypr-input-switcher` daemon, which
 owns the Hyprland event stream — a process the shell's lifetime cannot hold.
 
 Bloom exposes no machine-readable output today, so we add a `--json` flag to

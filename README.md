@@ -5,7 +5,7 @@ A live input-method bar widget and a control panel for **Omarchy 4.0+
 switches them straight from the bar, and it fuses two engines around that core:
 
 - **`bloom`** — Rime schema / package management (which Schemas are enabled and
-  installed). _Bridge: planned._
+  installed). _Bridge: read-only in the bar panel._
 - **`hypr-input-switcher`** — automatic switching by window and layer rules.
   _Bridge: the Overlay below._
 
@@ -47,10 +47,23 @@ The whole plugin is **pure Quickshell & JavaScript** — no Python.
 > The `hypr-input-switcher` daemon keeps doing the automatic switching; the
 > plugin only edits its configuration and shows its state.
 
-### Bloom bridge
+### Bloom bridge (read-only)
 
-_Planned._ Surfacing Bloom's Enabled Schemas, Installed Packages, and updates,
-with mutations run in a terminal.
+When the `bloom` binary is on `PATH`, the control panel grows a third,
+read-only section:
+
+- 📦 **Enabled Schemas** — the Schema list from `default.custom.yaml`; the
+  Active Schema is ticked.
+- 🧩 **Installed Packages** — each package tracked in Bloom's `state.json`,
+  with its Schemas and version.
+- ⬆️ **Updates** — packages whose remote `HEAD` differs, refreshed on a
+  five-minute cache and on demand, never on the one-second fcitx5 poll.
+
+Reads go through `bloom --json …` (see ADR 0005); the plugin never parses
+Bloom's formatted text. Mutations — enable, disable, install, remove, upgrade —
+arrive in a later phase and run in a terminal rather than inside the shell
+process. Without `bloom` installed the panel quietly falls back to its two
+fcitx5 sections.
 
 ---
 
@@ -64,8 +77,10 @@ with mutations run in a terminal.
 ├── Backend.qml              # Owns every backend process; typed state + verbs
 ├── Overlay.qml              # Rule/Input Method configuration overlay
 ├── FcitxController.js       # fcitx5 / Rime D-Bus helpers (busctl --json)
+├── BloomController.js       # bloom --json argv builders and parsers
 ├── i18n.js                  # Internationalization (EN / ZH)
 ├── yaml.js                  # Pure JavaScript YAML parser and serializer
+├── test/                    # Node unit tests for the JS seams
 ├── LICENSE
 ├── README.md
 ├── CONTEXT.md               # Domain glossary
@@ -82,8 +97,8 @@ with mutations run in a terminal.
 - **fcitx5** with the **Rime** addon (`org.fcitx.Fcitx5` on the session bus)
 - **[hypr-input-switcher](https://github.com/icyleaf/hypr-input-switcher)**
   (`/usr/bin/hypr-input-switcher` or in `$PATH`) — for the Overlay's rule engine
-- **[bloom](https://github.com/icyleaf/bloom)** _(optional)_ — for the planned
-  Bloom bridge
+- **[bloom](https://github.com/icyleaf/bloom)** _(optional)_ — for the
+  read-only Bloom bridge; needs a build with the `--json` flag
 - **[slurp](https://github.com/emersion/slurp)** _(optional)_ — interactive
   window picking
 
