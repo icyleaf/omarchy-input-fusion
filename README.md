@@ -27,6 +27,9 @@ The whole plugin is **pure Quickshell & JavaScript** — no Python.
   Active Schema.
 - 🅰️ **Direct Mode**: a dedicated row deactivates fcitx5, falling through to
   the bare keyboard layout (the `english` state).
+- 🧭 **Rules entry**: when `hypr-input-switcher` is on `PATH`, the panel's
+  bottom row shows the daemon's running state and opens the Overlay on its
+  Rules tab (its configuration editor).
 - 🔄 **Optimistic, verified switching**: every switch is written over D-Bus and
   read back, since fcitx5 silently accepts invalid names.
 - 🖥️ **Per-monitor**: each bar instance polls independently; no background

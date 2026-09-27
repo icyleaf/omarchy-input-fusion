@@ -37,9 +37,16 @@ Item {
     property string groupName: ""
     property var groupMembers: []
     property var allSchemas: []
-    property bool daemonRunning: false
     property string lastError: ""
     property var configData: ({})
+    // --- hypr-input-switcher bridge -----------------------------------------
+    // The daemon is optional: the binary may be absent, in which case its UI
+    // entry is hidden. Availability and version are probed at startup; running
+    // state and PID ride the fcitx5 poll.
+    property bool switcherAvailable: false
+    property string switcherVersion: ""
+    property bool switcherRunning: false
+    property int switcherPid: 0
 
     // --- Bloom bridge -------------------------------------------------------
     // Bloom is an optional external engine. Reads run on a slow cadence and on
@@ -83,7 +90,19 @@ Item {
         if (!pGroup.running) pGroup.running = true;
         if (!pSchema.running) pSchema.running = true;
         if (!pSchemas.running) pSchemas.running = true;
-        if (!pDaemon.running) pDaemon.running = true;
+        if (!pSwitcherRunning.running) pSwitcherRunning.running = true;
+    }
+
+    // --- hypr-input-switcher reads ------------------------------------------
+    // Availability is a one-off probe; the running PID is refreshed with the
+    // fcitx5 poll so the Overlay's status strip stays live.
+    function detectSwitcher() {
+        if (!pSwitcherVersion.running) pSwitcherVersion.running = true;
+    }
+
+    function refreshSwitcher() {
+        backend.detectSwitcher();
+        if (!pSwitcherRunning.running) pSwitcherRunning.running = true;
     }
 
     // --- Bloom reads --------------------------------------------------------
@@ -245,9 +264,42 @@ Item {
     }
 
     Process {
-        id: pDaemon
+        id: pSwitcherVersion
+        // A wrapper so a missing binary is a non-zero exit rather than a
+        // failed start; the version line is the first match for x.y[.z].
+        command: ["sh", "-c", "hypr-input-switcher version 2>/dev/null"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var out = (text || "").trim();
+                var match = out.match(/(\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?)/);
+                if (out !== "" && match) {
+                    backend.switcherAvailable = true;
+                    backend.switcherVersion = match[1];
+                } else {
+                    backend.switcherAvailable = false;
+                    backend.switcherVersion = "";
+                }
+            }
+        }
+    }
+
+    Process {
+        id: pSwitcherRunning
         command: ["pgrep", "-f", "hypr-input-switcher"]
-        onExited: (code, status) => { backend.daemonRunning = (code === 0); }
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                var pid = parseInt((text || "").trim().split("\n")[0]);
+                if (!isNaN(pid) && pid > 0) {
+                    backend.switcherRunning = true;
+                    backend.switcherPid = pid;
+                } else {
+                    backend.switcherRunning = false;
+                    backend.switcherPid = 0;
+                }
+            }
+        }
     }
 
     Process {
@@ -406,7 +458,7 @@ Item {
             isRime: backend.isRime,
             unavailable: backend.unavailable,
             inputRows: inputRows,
-            daemonRunning: backend.daemonRunning,
+            daemonRunning: backend.switcherRunning,
             error: backend.lastError
         };
     }

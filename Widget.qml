@@ -6,7 +6,7 @@ import "i18n.js" as I18n
 import "BloomController.js" as Bloom
 
 // Omarchy bar widget for Input Fusion: the live fcitx5 Input Method / Rime
-// Schema indicator. Left click opens the control panel; middle click opens the
+// Schema indicator. Left click opens the control panel; right click opens the
 // Overlay.
 //
 // All fcitx5 access lives in Backend, which this widget owns. The widget never
@@ -58,6 +58,11 @@ BarWidget {
     readonly property string bloomError: backend.bloomError
     readonly property bool bloomWriteRunning: backend.bloomWriteRunning
     readonly property string bloomWriteError: backend.bloomWriteError
+
+    // hypr-input-switcher bridge: the daemon is optional, so the panel's entry
+    // to its rules editor appears only when the binary is found (ADR 0004).
+    readonly property bool switcherAvailable: backend.switcherAvailable
+    readonly property bool switcherRunning: backend.switcherRunning
 
     readonly property string label: {
         if (backend.active) {
@@ -119,6 +124,13 @@ BarWidget {
     function refreshBloom() { backend.refreshBloom(); }
     function refreshBloomUpdates() { backend.refreshBloomUpdates(); }
 
+    // Opens the Overlay on its Rules tab (the hypr-input-switcher config
+    // editor). The payload is read by Overlay.open to pick the tab.
+    function openRules() {
+        if (root.bar)
+            root.bar.run("omarchy-shell shell toggle icyleaf.input-fusion '{\"tab\":\"rules\"}'");
+    }
+
     // Enable/disable run in-process (fast, safe); upgrade opens a floating
     // terminal, never the shell process. See ADR 0003.
     function bloomToggleSchema(schema, enabled) { backend.setSchemaEnabled(schema, enabled); }
@@ -154,6 +166,7 @@ BarWidget {
         I18n.setLanguage(root.lang);
         backend.refresh();
         backend.detectBloom();
+        backend.detectSwitcher();
     }
 
     Timer {
@@ -191,7 +204,7 @@ BarWidget {
         tooltipText: root.tooltip
         onPressed: function(mouseButton) {
             if (mouseButton === Qt.LeftButton) root.toggle();
-            else if (mouseButton === Qt.MiddleButton && root.bar)
+            else if (mouseButton === Qt.RightButton && root.bar)
                 root.bar.run("omarchy-shell shell toggle icyleaf.input-fusion");
         }
     }

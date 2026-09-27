@@ -44,11 +44,11 @@ Item {
         I18n.setLanguage(root.lang);
     }
 
-    // System Status Properties (Explicit reactive properties for reliable QML bindings)
-    property bool isInstalled: false
-    property bool isRunning: false
-    property int runningPid: 0
-    property string binaryVersion: ""
+    // System Status Properties (bound to the shared Backend probe, ADR 0004)
+    readonly property bool isInstalled: bloom.switcherAvailable
+    readonly property bool isRunning: bloom.switcherRunning
+    readonly property int runningPid: bloom.switcherPid
+    readonly property string binaryVersion: bloom.switcherVersion
     property bool configExists: false
     property bool hasSlurp: false
 
@@ -87,11 +87,23 @@ Item {
     readonly property int cornerRadius: Style.cornerRadius
 
     function open(payloadJson) {
+        root.applyTabPayload(payloadJson);
         root.opened = true;
         configFileView.reload();
         root.loadStatus();
         root.refreshBloom();
         Qt.callLater(function() { keyCatcher.forceActiveFocus() });
+    }
+
+    // The bar panel's hypr-input-switcher entry asks for the Rules tab; other
+    // callers pass no payload and land on whatever tab was last shown.
+    function applyTabPayload(payloadJson) {
+        if (!payloadJson) return;
+        try {
+            var payload = JSON.parse(payloadJson);
+            var tabs = { rules: 0, input_methods: 1, bloom: 2 };
+            if (payload && tabs[payload.tab] !== undefined) root.currentTab = tabs[payload.tab];
+        } catch (e) {}
     }
 
     function close() {
@@ -210,62 +222,6 @@ Item {
         onLoadFailed: root.loadDefaultConfig()
     }
 
-    // Diagnostics: CLI Version Probe
-    Process {
-        id: versionProcess
-        command: ["hypr-input-switcher", "version"]
-        property string outputBuffer: ""
-
-        stdout: SplitParser {
-            onRead: data => { versionProcess.outputBuffer += data }
-        }
-
-        onExited: (code, status) => {
-            if (code === 0 && outputBuffer.trim().length > 0) {
-                root.isInstalled = true;
-                var match = outputBuffer.match(/(\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?)/);
-                if (match) {
-                    root.binaryVersion = match[1];
-                } else {
-                    root.binaryVersion = "0.0.0";
-                }
-            } else {
-                root.isInstalled = false;
-                root.binaryVersion = "";
-            }
-            outputBuffer = "";
-        }
-    }
-
-    // Diagnostics: Daemon Process Probe
-    Process {
-        id: pgrepProcess
-        command: ["pgrep", "-f", "hypr-input-switcher"]
-        property string outputBuffer: ""
-
-        stdout: SplitParser {
-            onRead: data => { pgrepProcess.outputBuffer += data }
-        }
-
-        onExited: (code, status) => {
-            if (code === 0 && outputBuffer.trim().length > 0) {
-                var pids = outputBuffer.trim().split("\n");
-                var validPid = parseInt(pids[0]);
-                if (!isNaN(validPid) && validPid > 0) {
-                    root.isRunning = true;
-                    root.runningPid = validPid;
-                } else {
-                    root.isRunning = false;
-                    root.runningPid = 0;
-                }
-            } else {
-                root.isRunning = false;
-                root.runningPid = 0;
-            }
-            outputBuffer = "";
-        }
-    }
-
     // Diagnostics: Slurp Availability Probe
     Process {
         id: slurpCheckProcess
@@ -369,7 +325,8 @@ Item {
 
     // The Overlay is a separate plugin surface, so it owns its own Backend
     // (ADR 0004): the same detection, reads, and in-process write verbs as the
-    // bar widget. fcitx5 reads are suspended; only the Bloom bridge is used.
+    // bar widget. fcitx5 reads are suspended; the Bloom bridge and the
+    // hypr-input-switcher probe are used.
     Backend {
         id: bloom
         autoSwitchToRime: false
@@ -415,10 +372,7 @@ Item {
     }
 
     function loadStatus() {
-        versionProcess.outputBuffer = "";
-        versionProcess.running = true;
-        pgrepProcess.outputBuffer = "";
-        pgrepProcess.running = true;
+        bloom.refreshSwitcher();
         slurpCheckProcess.outputBuffer = "";
         slurpCheckProcess.running = true;
     }
@@ -1379,210 +1333,246 @@ Item {
                             }
                         }
 
-                        // Registry
-                        Text {
-                            Layout.fillWidth: true
-                            text: root.tr("bloom_registry") + " — " + root.tr("bloom_registry_hint")
-                            font.pixelSize: 12
-                            color: Qt.darker(root.foreground, 1.3)
-                            elide: Text.ElideRight
-                        }
-
-                        Rectangle {
+                        // Registry (left) and Installed Packages (right), so the
+                        // two halves of the Bloom bridge read side by side.
+                        RowLayout {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            Layout.preferredHeight: 180
-                            radius: 8
-                            color: root.background
-                            border.color: root.border
-                            border.width: 1
-                            clip: true
+                            spacing: 10
 
-                            ListView {
-                                id: registryList
-                                anchors.fill: parent
-                                anchors.margins: 6
-                                spacing: 6
-                                model: bloom.bloomRegistry
+                            // Registry
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                spacing: 8
 
-                                delegate: Rectangle {
-                                    id: registryRow
-                                    required property var modelData
-
-                                    width: registryList.width
-                                    height: 44
-                                    radius: 6
-                                    color: registryMouse.containsMouse ? root.selectedBackground : "transparent"
-                                    border.color: root.border
-                                    border.width: 1
-
-                                    RowLayout {
-                                        anchors.fill: parent
-                                        anchors.leftMargin: 12
-                                        anchors.rightMargin: 12
-                                        spacing: 10
-
-                                        Text {
-                                            text: registryRow.modelData.name
-                                            font.pixelSize: 12
-                                            font.bold: true
-                                            color: root.accent
-                                            Layout.preferredWidth: 130
-                                            elide: Text.ElideRight
-                                        }
-
-                                        Text {
-                                            text: registryRow.modelData.repo
-                                            font.pixelSize: 11
-                                            color: Qt.darker(root.foreground, 1.4)
-                                            Layout.preferredWidth: 170
-                                            elide: Text.ElideRight
-                                        }
-
-                                        Text {
-                                            text: registryRow.modelData.description
-                                            font.pixelSize: 11
-                                            color: root.foreground
-                                            Layout.fillWidth: true
-                                            elide: Text.ElideRight
-                                        }
-
-                                        Button {
-                                            text: registryRow.modelData.installed ? root.tr("bloom_remove") : root.tr("bloom_install")
-                                            bordered: true
-                                            foreground: registryRow.modelData.installed ? "#f38ba8" : root.foreground
-                                            onClicked: registryRow.modelData.installed
-                                                ? bloomRemove(registryRow.modelData.repo)
-                                                : bloomInstall(registryRow.modelData.repo)
-                                        }
-                                    }
-
-                                    MouseArea {
-                                        id: registryMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        z: -1
-                                    }
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: root.tr("bloom_registry") + " — " + root.tr("bloom_registry_hint")
+                                    font.pixelSize: 12
+                                    color: Qt.darker(root.foreground, 1.3)
+                                    elide: Text.ElideRight
                                 }
-                            }
 
-                            Text {
-                                anchors.centerIn: parent
-                                visible: bloom.bloomRegistry.length === 0
-                                text: bloom.bloomAvailable ? root.tr("bloom_empty_registry") : root.tr("bloom_not_detected")
-                                color: Qt.darker(root.foreground, 1.4)
-                                font.pixelSize: 12
-                            }
-                        }
-
-                        // Installed packages
-                        Text {
-                            Layout.fillWidth: true
-                            text: root.tr("bloom_packages")
-                            font.pixelSize: 12
-                            color: Qt.darker(root.foreground, 1.3)
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            Layout.preferredHeight: 140
-                            radius: 8
-                            color: root.background
-                            border.color: root.border
-                            border.width: 1
-                            clip: true
-
-                            ListView {
-                                id: installedList
-                                anchors.fill: parent
-                                anchors.margins: 6
-                                spacing: 6
-                                model: bloom.bloomPackages
-
-                                delegate: Rectangle {
-                                    id: installedRow
-                                    required property var modelData
-
-                                    width: installedList.width
-                                    height: 44
-                                    radius: 6
-                                    color: installedMouse.containsMouse ? root.selectedBackground : "transparent"
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    radius: 8
+                                    color: root.background
                                     border.color: root.border
                                     border.width: 1
-                                    // A Local Package has no remote, so removing it
-                                    // deletes hand-placed files: require a second click.
-                                    property bool confirmingRemove: false
+                                    clip: true
 
-                                    RowLayout {
+                                    ListView {
+                                        id: registryList
                                         anchors.fill: parent
-                                        anchors.leftMargin: 12
-                                        anchors.rightMargin: 12
-                                        spacing: 10
+                                        anchors.margins: 6
+                                        spacing: 6
+                                        model: bloom.bloomRegistry
 
-                                        Text {
-                                            text: Bloom.packageLabel(installedRow.modelData.repo)
-                                            font.pixelSize: 12
-                                            font.bold: true
-                                            color: root.accent
-                                            Layout.preferredWidth: 180
-                                            elide: Text.ElideRight
-                                        }
+                                        delegate: Rectangle {
+                                            id: registryRow
+                                            required property var modelData
 
-                                        Text {
-                                            text: (installedRow.modelData.schemas || []).join(", ")
-                                            font.pixelSize: 11
-                                            color: root.foreground
-                                            Layout.fillWidth: true
-                                            elide: Text.ElideRight
-                                        }
+                                            width: registryList.width
+                                            height: 52
+                                            radius: 6
+                                            color: registryMouse.containsMouse ? root.selectedBackground : "transparent"
+                                            border.color: root.border
+                                            border.width: 1
 
-                                        Text {
-                                            text: installedRow.modelData.version
-                                            font.pixelSize: 11
-                                            color: Qt.darker(root.foreground, 1.4)
-                                            Layout.preferredWidth: 90
-                                            elide: Text.ElideRight
-                                        }
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 10
+                                                anchors.rightMargin: 10
+                                                spacing: 8
 
-                                        Button {
-                                            visible: !installedRow.modelData.local
-                                            text: root.tr("bloom_upgrade")
-                                            bordered: true
-                                            onClicked: bloomUpgrade(installedRow.modelData.repo)
-                                        }
+                                                ColumnLayout {
+                                                    Layout.fillWidth: true
+                                                    spacing: 2
 
-                                        Button {
-                                            text: (installedRow.modelData.local && installedRow.confirmingRemove)
-                                                ? root.tr("bloom_confirm_remove")
-                                                : root.tr("bloom_remove")
-                                            bordered: true
-                                            foreground: "#f38ba8"
-                                            onClicked: {
-                                                if (installedRow.modelData.local && !installedRow.confirmingRemove) {
-                                                    installedRow.confirmingRemove = true;
-                                                    return;
+                                                    RowLayout {
+                                                        Layout.fillWidth: true
+                                                        spacing: 6
+
+                                                        Text {
+                                                            text: registryRow.modelData.name
+                                                            font.pixelSize: 12
+                                                            font.bold: true
+                                                            color: root.accent
+                                                            elide: Text.ElideRight
+                                                        }
+
+                                                        Text {
+                                                            Layout.fillWidth: true
+                                                            text: registryRow.modelData.repo
+                                                            font.pixelSize: 10
+                                                            color: Qt.darker(root.foreground, 1.4)
+                                                            elide: Text.ElideRight
+                                                        }
+                                                    }
+
+                                                    Text {
+                                                        Layout.fillWidth: true
+                                                        text: registryRow.modelData.description
+                                                        font.pixelSize: 10
+                                                        color: root.foreground
+                                                        elide: Text.ElideRight
+                                                    }
                                                 }
-                                                bloomRemove(installedRow.modelData.repo);
+
+                                                Button {
+                                                    text: registryRow.modelData.installed ? root.tr("bloom_remove") : root.tr("bloom_install")
+                                                    bordered: true
+                                                    foreground: registryRow.modelData.installed ? "#f38ba8" : root.foreground
+                                                    onClicked: registryRow.modelData.installed
+                                                        ? bloomRemove(registryRow.modelData.repo)
+                                                        : bloomInstall(registryRow.modelData.repo)
+                                                }
+                                            }
+
+                                            MouseArea {
+                                                id: registryMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                z: -1
                                             }
                                         }
                                     }
 
-                                    MouseArea {
-                                        id: installedMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        z: -1
+                                    Text {
+                                        anchors.centerIn: parent
+                                        visible: bloom.bloomRegistry.length === 0
+                                        text: bloom.bloomAvailable ? root.tr("bloom_empty_registry") : root.tr("bloom_not_detected")
+                                        color: Qt.darker(root.foreground, 1.4)
+                                        font.pixelSize: 12
                                     }
                                 }
                             }
 
-                            Text {
-                                anchors.centerIn: parent
-                                visible: bloom.bloomPackages.length === 0
-                                text: root.tr("bloom_no_packages")
-                                color: Qt.darker(root.foreground, 1.4)
-                                font.pixelSize: 12
+                            // Installed packages
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                spacing: 8
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: root.tr("bloom_packages")
+                                    font.pixelSize: 12
+                                    color: Qt.darker(root.foreground, 1.3)
+                                }
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    radius: 8
+                                    color: root.background
+                                    border.color: root.border
+                                    border.width: 1
+                                    clip: true
+
+                                    ListView {
+                                        id: installedList
+                                        anchors.fill: parent
+                                        anchors.margins: 6
+                                        spacing: 6
+                                        model: bloom.bloomPackages
+
+                                        delegate: Rectangle {
+                                            id: installedRow
+                                            required property var modelData
+
+                                            width: installedList.width
+                                            height: 52
+                                            radius: 6
+                                            color: installedMouse.containsMouse ? root.selectedBackground : "transparent"
+                                            border.color: root.border
+                                            border.width: 1
+                                            // A Local Package has no remote, so removing it
+                                            // deletes hand-placed files: require a second click.
+                                            property bool confirmingRemove: false
+
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 10
+                                                anchors.rightMargin: 10
+                                                spacing: 8
+
+                                                ColumnLayout {
+                                                    Layout.fillWidth: true
+                                                    spacing: 2
+
+                                                    RowLayout {
+                                                        Layout.fillWidth: true
+                                                        spacing: 6
+
+                                                        Text {
+                                                            text: Bloom.packageLabel(installedRow.modelData.repo)
+                                                            font.pixelSize: 12
+                                                            font.bold: true
+                                                            color: root.accent
+                                                            elide: Text.ElideRight
+                                                        }
+
+                                                        Text {
+                                                            Layout.fillWidth: true
+                                                            text: installedRow.modelData.version
+                                                            font.pixelSize: 10
+                                                            color: Qt.darker(root.foreground, 1.4)
+                                                            elide: Text.ElideRight
+                                                        }
+                                                    }
+
+                                                    Text {
+                                                        Layout.fillWidth: true
+                                                        text: (installedRow.modelData.schemas || []).join(", ")
+                                                        font.pixelSize: 10
+                                                        color: root.foreground
+                                                        elide: Text.ElideRight
+                                                    }
+                                                }
+
+                                                Button {
+                                                    visible: !installedRow.modelData.local
+                                                    text: root.tr("bloom_upgrade")
+                                                    bordered: true
+                                                    onClicked: bloomUpgrade(installedRow.modelData.repo)
+                                                }
+
+                                                Button {
+                                                    text: (installedRow.modelData.local && installedRow.confirmingRemove)
+                                                        ? root.tr("bloom_confirm_remove")
+                                                        : root.tr("bloom_remove")
+                                                    bordered: true
+                                                    foreground: "#f38ba8"
+                                                    onClicked: {
+                                                        if (installedRow.modelData.local && !installedRow.confirmingRemove) {
+                                                            installedRow.confirmingRemove = true;
+                                                            return;
+                                                        }
+                                                        bloomRemove(installedRow.modelData.repo);
+                                                    }
+                                                }
+                                            }
+
+                                            MouseArea {
+                                                id: installedMouse
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                z: -1
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        visible: bloom.bloomPackages.length === 0
+                                        text: root.tr("bloom_no_packages")
+                                        color: Qt.darker(root.foreground, 1.4)
+                                        font.pixelSize: 12
+                                    }
+                                }
                             }
                         }
 
@@ -1596,7 +1586,6 @@ Item {
 
                         Rectangle {
                             Layout.fillWidth: true
-                            Layout.fillHeight: true
                             Layout.preferredHeight: 120
                             radius: 8
                             color: root.background

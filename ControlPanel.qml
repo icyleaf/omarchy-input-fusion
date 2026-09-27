@@ -65,6 +65,11 @@ Panel {
     readonly property bool bloomWriteRunning: root.hostWidget ? root.hostWidget.bloomWriteRunning : false
     readonly property string bloomWriteError: root.hostWidget ? root.hostWidget.bloomWriteError : ""
 
+    // hypr-input-switcher bridge: the entry to its rules editor is shown only
+    // when the daemon binary is installed.
+    readonly property bool switcherVisible: root.hostWidget ? root.hostWidget.switcherAvailable : false
+    readonly property bool switcherRunning: root.hostWidget ? root.hostWidget.switcherRunning : false
+
     readonly property var rawSchemaRows: root.hostWidget ? root.hostWidget.schemaRows : []
     property var schemaRows: []
     // The Schema id a toggle just changed, so the cursor can follow it across
@@ -126,6 +131,11 @@ Panel {
     // processes of its own).
     function bloomUpgrade(repo) {
         if (root.hostWidget) root.hostWidget.bloomUpgrade(repo);
+    }
+
+    // Opens the Overlay (hypr-input-switcher's rules editor) via the widget.
+    function openRules() {
+        if (root.hostWidget) root.hostWidget.openRules();
     }
 
     function takeSnapshot() {
@@ -413,6 +423,77 @@ Panel {
                             font.family: Style.font.family
                             font.pixelSize: Style.font.caption
                             wrapMode: Text.WordWrap
+                        }
+
+                        // hypr-input-switcher entry: opens the full Overlay on
+                        // its Rules tab. Shown only when the daemon binary is
+                        // present (the Overlay is that daemon's editor).
+                        Rectangle {
+                            width: parent.width
+                            height: Style.spacing.hairline
+                            visible: root.switcherVisible
+                            color: Util.alpha(root.panelForeground, 0.16)
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: Style.space(38)
+                            visible: root.switcherVisible
+                            radius: Style.cornerRadius
+                            color: rulesMouse.containsMouse
+                                ? Style.hoverFillFor(root.panelForeground, root.panelAccent) : "transparent"
+
+                            Row {
+                                anchors.fill: parent
+                                anchors.leftMargin: Style.spacing.rowPaddingX
+                                anchors.rightMargin: Style.spacing.rowPaddingX
+                                spacing: Style.spacing.controlGap
+
+                                Item {
+                                    width: Style.space(18)
+                                    height: width
+                                    anchors.verticalCenter: parent.verticalCenter
+
+                                    Rectangle {
+                                        anchors.centerIn: parent
+                                        width: Style.space(8)
+                                        height: width
+                                        radius: width / 2
+                                        color: root.switcherRunning ? "#a6e3a1" : "#fab387"
+                                    }
+                                }
+
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: parent.width - Style.space(18) - chevron.width - Style.spacing.controlGap * 2
+                                    text: root.tr("rules_entry")
+                                    color: root.panelForeground
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.body
+                                    elide: Text.ElideRight
+                                }
+
+                                Text {
+                                    id: chevron
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "›"
+                                    color: root.panelForeground
+                                    opacity: 0.58
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.body
+                                }
+                            }
+
+                            MouseArea {
+                                id: rulesMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    root.close();
+                                    root.openRules();
+                                }
+                            }
                         }
                     }
                 }
