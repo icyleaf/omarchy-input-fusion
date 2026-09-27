@@ -663,24 +663,30 @@ Item {
                         }
 
                         ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
                             spacing: 3
 
                             Text {
+                                Layout.fillWidth: true
                                 text: root.tr("title")
                                 font.family: root.fontFamily
                                 font.pixelSize: 18
                                 font.bold: true
                                 color: root.foreground
+                                elide: Text.ElideRight
                             }
                             Text {
+                                Layout.fillWidth: true
                                 text: root.tr("subtitle")
                                 font.family: root.fontFamily
                                 font.pixelSize: 12
                                 color: Qt.darker(root.foreground, 1.4)
+                                elide: Text.ElideRight
                             }
                         }
 
-                        Item { Layout.fillWidth: true }
+                        Item { Layout.fillWidth: true; Layout.preferredWidth: 1 }
 
                         // Tabs Switcher
                         RowLayout {
@@ -1297,13 +1303,14 @@ Item {
                                 }
 
                                 Text {
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
                                     text: bloom.bloomAvailable ? root.tr("bloom_installed_hint") : root.tr("bloom_not_detected")
                                     color: bloom.bloomAvailable ? root.foreground : "#f38ba8"
                                     font.family: root.fontFamily
                                     font.pixelSize: 12
+                                    elide: Text.ElideRight
                                 }
-
-                                Item { Layout.fillWidth: true }
 
                                 Button {
                                     text: root.tr("bloom_import_existing")
@@ -1336,6 +1343,7 @@ Item {
                         // Registry (left) and Installed Packages (right), so the
                         // two halves of the Bloom bridge read side by side.
                         RowLayout {
+                            id: bloomColumns
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             spacing: 10
@@ -1343,6 +1351,11 @@ Item {
                             // Registry
                             ColumnLayout {
                                 Layout.fillWidth: true
+                                // Equal halves of the row (minus the gap): the
+                                // registry hint's implicit width would otherwise
+                                // steal space from the installed column.
+                                Layout.preferredWidth: Math.max(0, (bloomColumns.width - bloomColumns.spacing) / 2)
+                                Layout.minimumWidth: 0
                                 Layout.fillHeight: true
                                 spacing: 8
 
@@ -1453,6 +1466,8 @@ Item {
                             // Installed packages
                             ColumnLayout {
                                 Layout.fillWidth: true
+                                Layout.preferredWidth: Math.max(0, (bloomColumns.width - bloomColumns.spacing) / 2)
+                                Layout.minimumWidth: 0
                                 Layout.fillHeight: true
                                 spacing: 8
 
