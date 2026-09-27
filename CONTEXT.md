@@ -44,6 +44,13 @@ A Rime package Bloom has installed and tracks in `state.json`, along with the
 files and Schemas it owns.
 _Avoid_: schema, recipe
 
+**Local Package**:
+An Installed Package Bloom adopted by scanning the Rime user directory instead
+of installing from a remote repository. Its files were placed by hand; it owns
+exactly the Schemas traced from one `*.schema.yaml`. It can be Removed, which
+deletes those files, but not upgraded.
+_Avoid_: local schema, imported schema, scanned schema
+
 **Installed Schema**:
 A Schema whose files are present in the Rime user directory, whether or not it
 is Enabled. Present because an Installed Package owns it, or because it was

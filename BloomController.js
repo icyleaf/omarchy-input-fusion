@@ -33,6 +33,13 @@ function deployCommand() {
     return ["bloom", "--json", "deploy"];
 }
 
+// import-existing scans the Rime user directory for Schemas Bloom did not
+// install and registers them as Local Packages. It reads the filesystem and
+// writes state.json, so it is fast and offline: an in-process write.
+function importCommand() {
+    return ["bloom", "--json", "import-existing"];
+}
+
 // Heavy writes are handed to Omarchy's floating-terminal launcher. The launcher
 // joins its arguments and runs them under `bash -c`, so every argument is
 // passed through untouched as a single argv element.
@@ -261,11 +268,13 @@ function packageArray(value) {
     if (!Array.isArray(value)) return out;
     for (var i = 0; i < value.length; i++) {
         var item = value[i] || {};
+        var repo = String(item.repo || "");
         out.push({
-            repo: String(item.repo || ""),
+            repo: repo,
             version: String(item.version || ""),
             installedAt: String(item.installed_at || ""),
-            schemas: stringArray(item.schemas)
+            schemas: stringArray(item.schemas),
+            local: isLocalRepo(repo)
         });
     }
     return out;
@@ -291,8 +300,15 @@ function updateArray(value) {
 // tracking key is "local/<schema>" but only "<schema>" is worth showing.
 function packageLabel(repo) {
     var text = String(repo || "");
-    if (text.indexOf("local/") === 0) return text.slice("local/".length);
+    if (isLocalRepo(text)) return text.slice("local/".length);
     return text;
+}
+
+// isLocalRepo marks a Local Package: a Bloom-tracked package whose files were
+// placed by hand and imported, rather than installed from a remote repo. It
+// cannot be upgraded, only removed.
+function isLocalRepo(repo) {
+    return String(repo || "").indexOf("local/") === 0;
 }
 
 function numberOr(value, fallback) {

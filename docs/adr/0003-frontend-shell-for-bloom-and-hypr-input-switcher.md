@@ -20,6 +20,7 @@ plugin's contract data instead of prose, and makes Bloom scriptable in general.
   without it; Bloom is not bundled (it is a separate, larger binary).
 - Heavy or untrusted writes (`install`, `upgrade`, `remove` clone remote git and
   run recipes) run in a floating terminal, not inside the shell process. Fast,
-  safe writes (`enable`, `disable`, `deploy`) run in-process.
+  safe writes (`enable`, `disable`, `deploy`, `import-existing`) run in-process;
+  `import-existing` only scans the local Rime directory and writes `state.json`.
 - The daemon's rule engine keeps its own `~/.config/hypr-input-switcher/`
   configuration; the plugin is a second editor of it, not a replacement.

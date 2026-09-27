@@ -14,9 +14,9 @@ const context = { module: { exports: {} }, console, JSON, Array, Number, String,
 vm.createContext(context);
 vm.runInContext(
     source +
-        "\nmodule.exports = { whichCommand, listCommand, listRegistryCommand, updateCommand, deployCommand, launchCommand, " +
+        "\nmodule.exports = { whichCommand, listCommand, listRegistryCommand, updateCommand, deployCommand, importCommand, launchCommand, " +
         "enableCommand, disableCommand, installArgs, removeArgs, upgradeArgs, upgradeAllArgs, " +
-        "parse, errorMessage, list, registry, updates, schemas, packageLabel, stringArray, updateArray };",
+        "parse, errorMessage, list, registry, updates, schemas, packageLabel, isLocalRepo, packageArray, stringArray, updateArray };",
     context,
 );
 const Bloom = context.module.exports;
@@ -36,6 +36,7 @@ test("command builders", () => {
     assert.deepEqual([...Bloom.whichCommand()], ["sh", "-c", "command -v bloom"]);
     assert.deepEqual([...Bloom.listCommand()], ["bloom", "--json", "list"]);
     assert.deepEqual([...Bloom.updateCommand()], ["bloom", "--json", "update"]);
+    assert.deepEqual([...Bloom.importCommand()], ["bloom", "--json", "import-existing"]);
 });
 
 test("parse rejects malformed and non-object payloads", () => {
@@ -77,6 +78,7 @@ test("list shapes a good payload and filters empty schemas", () => {
     );
     assert.equal(data.packages.length, 1);
     assert.deepEqual([...data.packages[0].schemas], ["py"]);
+    assert.equal(data.packages[0].local, true);
     assert.equal(data.updatesAvailable, 3);
 });
 
@@ -113,6 +115,21 @@ test("packageLabel strips the local/ scan prefix", () => {
     assert.equal(Bloom.packageLabel("local/py"), "py");
     assert.equal(Bloom.packageLabel("rime/rime-luna-pinyin"), "rime/rime-luna-pinyin");
     assert.equal(Bloom.packageLabel(""), "");
+});
+
+test("isLocalRepo marks Local Packages; packageArray carries the flag", () => {
+    assert.equal(Bloom.isLocalRepo("local/py"), true);
+    assert.equal(Bloom.isLocalRepo("rime/rime-luna-pinyin"), false);
+    assert.equal(Bloom.isLocalRepo(""), false);
+
+    const packages = Bloom.packageArray([
+        { repo: "local/py", version: "local", schemas: ["py"] },
+        { repo: "rime/rime-luna-pinyin", version: "1.2.3", schemas: ["luna_pinyin"] },
+    ]);
+    assert.deepEqual([...packages.map((p) => [p.repo, p.local])], [
+        ["local/py", true],
+        ["rime/rime-luna-pinyin", false],
+    ]);
 });
 
 test("registry and write command builders", () => {

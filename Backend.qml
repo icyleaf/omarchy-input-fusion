@@ -150,6 +150,13 @@ Item {
         backend.runBloomWrite(Bloom.deployCommand());
     }
 
+    // Registers hand-placed Schemas as Local Packages. It scans the filesystem
+    // and writes state.json (no network), so it runs in-process with the other
+    // fast writes.
+    function importExistingBloom() {
+        backend.runBloomWrite(Bloom.importCommand());
+    }
+
     // install/upgrade/remove never reach here; the UI launches them in a
     // terminal. This is the shared path for the fast in-process writes.
     function runBloomWrite(command) {

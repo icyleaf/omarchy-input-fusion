@@ -104,7 +104,10 @@ var translations = {
         "bloom_upgrade": "Upgrade",
         "bloom_not_detected": "Bloom is not installed or not on PATH",
         "bloom_empty_registry": "No registry entries",
-        "bloom_up_to_date_all": "All packages are up to date"
+        "bloom_up_to_date_all": "All packages are up to date",
+        "bloom_import_existing": "Import existing",
+        "bloom_local": "local",
+        "bloom_confirm_remove": "Confirm remove?"
     },
     "zh": {
         "title": "Hypr Input Switcher",
@@ -207,7 +210,10 @@ var translations = {
         "bloom_upgrade": "升级",
         "bloom_not_detected": "未检测到 Bloom（未安装或不在 PATH）",
         "bloom_empty_registry": "清单为空",
-        "bloom_up_to_date_all": "所有包均为最新"
+        "bloom_up_to_date_all": "所有包均为最新",
+        "bloom_import_existing": "导入现有方案",
+        "bloom_local": "本地",
+        "bloom_confirm_remove": "确认删除？"
     }
 };
 

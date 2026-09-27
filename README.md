@@ -63,7 +63,9 @@ and the Overlay a third tab. All reads go through `bloom --json …` (see ADR
   Schema is tagged when it is not enabled. Clicking a row sets the Active
   Schema; a checkbox (Bloom mode) enables/disables it in-process
   (`bloom enable` / `disable`), and a disabled schema stays listed.
-- 🧩 **Installed Packages** — click a package to upgrade it.
+- 🧩 **Installed Packages** — click a package to upgrade it. A **Local Package**
+  (one Bloom adopted by scanning the Rime directory, keyed `local/<schema>`)
+  has no remote, so its row is shown read-only here.
 - ⬆️ **Updates** — packages whose remote `HEAD` differs, refreshed on a
   five-minute cache and on demand, never on the one-second fcitx5 poll; click
   to upgrade.
@@ -71,7 +73,11 @@ and the Overlay a third tab. All reads go through `bloom --json …` (see ADR
 **Overlay — Bloom tab** — the full management surface:
 
 - Browse the **Registry** and Install/Remove packages.
-- **Upgrade** or Remove installed packages.
+- **Import existing** registers hand-placed Schemas as Local Packages
+  (`bloom import-existing`, in-process), so Bloom can track and manage a Rime
+  directory it never installed into.
+- **Upgrade** or Remove installed packages; a Local Package offers no Upgrade,
+  and its Remove asks for confirmation because it deletes the files on disk.
 - **Upgrade All** from the update list.
 
 Heavy writes (install, upgrade, remove) open a floating terminal and run

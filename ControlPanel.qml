@@ -83,7 +83,12 @@ Panel {
             // Schema is Enabled but no file is on disk (drift). An on-disk
             // ownerless schema is normal, so it shows the bare id.
             var sub = r.id;
-            if (r.owner !== "") sub = r.id + " · " + Bloom.packageLabel(r.owner);
+            if (r.owner !== "") {
+                // A Local Package's owner label collapses to the Schema id, so
+                // show the localized "local" marker instead of `id · id`.
+                var owner = Bloom.isLocalRepo(r.owner) ? root.tr("bloom_local") : Bloom.packageLabel(r.owner);
+                sub = r.id + " · " + owner;
+            }
             else if (root.bloomVisible && r.enabled && !r.installed) sub = r.id + " · " + root.tr("schema_ownerless");
             // A component (another schema depends on it) that the user has not
             // enabled is usually not a recipe meant to be selected directly.
@@ -624,7 +629,9 @@ Panel {
         }
     }
 
-    // Bloom package row: click upgrades it in a floating terminal.
+    // Bloom package row: click upgrades it in a floating terminal. A Local
+    // Package cannot be upgraded, so its row is read-only (management lives in
+    // the Overlay).
     Component {
         id: bloomPackageDelegate
 
@@ -635,7 +642,8 @@ Panel {
             width: parent.width
             height: Style.space(34)
             radius: Style.cornerRadius
-            color: packageMouse.containsMouse ? Style.hoverFillFor(root.panelForeground, root.panelAccent) : "transparent"
+            color: (packageMouse.containsMouse && !packageRow.modelData.local)
+                ? Style.hoverFillFor(root.panelForeground, root.panelAccent) : "transparent"
 
             Column {
                 anchors.fill: parent
@@ -673,9 +681,9 @@ Panel {
             MouseArea {
                 id: packageMouse
                 anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.bloomUpgrade(packageRow.modelData.repo)
+                hoverEnabled: !packageRow.modelData.local
+                cursorShape: packageRow.modelData.local ? Qt.ArrowCursor : Qt.PointingHandCursor
+                onClicked: if (!packageRow.modelData.local) root.bloomUpgrade(packageRow.modelData.repo)
             }
         }
     }

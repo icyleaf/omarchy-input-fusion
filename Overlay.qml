@@ -386,6 +386,10 @@ Item {
     function bloomRemove(repo) { launchBloom(Bloom.removeArgs(repo)); }
     function bloomUpgradeAll() { launchBloom(Bloom.upgradeAllArgs()); }
 
+    // import-existing is a filesystem scan plus a state.json write (no network),
+    // so it runs in-process and refreshes the lists when it finishes.
+    function bloomImportExisting() { bloom.importExistingBloom(); }
+
     // Update checks reuse the five-minute cache, so opening the Overlay does
     // not run `git ls-remote` every time.
     readonly property double bloomStaleAfter: Bloom.staleAfterMs
@@ -1348,6 +1352,12 @@ Item {
                                 Item { Layout.fillWidth: true }
 
                                 Button {
+                                    text: root.tr("bloom_import_existing")
+                                    bordered: true
+                                    onClicked: root.bloomImportExisting()
+                                }
+
+                                Button {
                                     text: root.tr("bloom_redeploy")
                                     bordered: true
                                     onClicked: bloom.redeployBloom()
@@ -1500,6 +1510,9 @@ Item {
                                     color: installedMouse.containsMouse ? root.selectedBackground : "transparent"
                                     border.color: root.border
                                     border.width: 1
+                                    // A Local Package has no remote, so removing it
+                                    // deletes hand-placed files: require a second click.
+                                    property bool confirmingRemove: false
 
                                     RowLayout {
                                         anchors.fill: parent
@@ -1533,16 +1546,25 @@ Item {
                                         }
 
                                         Button {
+                                            visible: !installedRow.modelData.local
                                             text: root.tr("bloom_upgrade")
                                             bordered: true
                                             onClicked: bloomUpgrade(installedRow.modelData.repo)
                                         }
 
                                         Button {
-                                            text: root.tr("bloom_remove")
+                                            text: (installedRow.modelData.local && installedRow.confirmingRemove)
+                                                ? root.tr("bloom_confirm_remove")
+                                                : root.tr("bloom_remove")
                                             bordered: true
                                             foreground: "#f38ba8"
-                                            onClicked: bloomRemove(installedRow.modelData.repo)
+                                            onClicked: {
+                                                if (installedRow.modelData.local && !installedRow.confirmingRemove) {
+                                                    installedRow.confirmingRemove = true;
+                                                    return;
+                                                }
+                                                bloomRemove(installedRow.modelData.repo);
+                                            }
                                         }
                                     }
 
