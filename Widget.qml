@@ -137,6 +137,17 @@ BarWidget {
             root.bar.run("omarchy-shell shell toggle icyleaf.input-fusion '{\"tab\":\"rules\"}'");
     }
 
+    // Opens the Overlay on its Bloom tab (Rime packages and schema manager).
+    function openBloom() {
+        if (root.bar)
+            root.bar.run("omarchy-shell shell toggle icyleaf.input-fusion '{\"tab\":\"bloom\"}'");
+    }
+
+    // Opens an external desktop configuration application (e.g. fcitx5-configtool or msime-linux-settings).
+    function launchDesktopApp(bin) {
+        Quickshell.execDetached(["uwsm", "app", "--", bin]);
+    }
+
     // Enable/disable run in-process (fast, safe); upgrade opens a floating
     // terminal, never the shell process. See ADR 0003.
     function bloomToggleSchema(schema, enabled) { backend.setSchemaEnabled(schema, enabled); }

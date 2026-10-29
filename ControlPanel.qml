@@ -135,6 +135,23 @@ Panel {
         if (root.hostWidget) root.hostWidget.openRules();
     }
 
+    readonly property var currentSettingsTarget: Fcitx.settingsTarget(root.snapshot.isRime, root.snapshot.imName)
+    readonly property string settingsLabel: root.tr(root.currentSettingsTarget.labelKey)
+
+    // Opens the appropriate configuration tool for the active Input Method.
+    function openSettings() {
+        if (!root.hostWidget) return;
+        var target = root.currentSettingsTarget;
+        root.close();
+        if (target.id === "rime") {
+            root.hostWidget.openBloom();
+        } else if (target.id === "msime") {
+            root.hostWidget.launchDesktopApp("msime-linux-settings");
+        } else {
+            root.hostWidget.launchDesktopApp("fcitx5-configtool");
+        }
+    }
+
     function takeSnapshot() {
         if (!root.hostWidget) return;
         var snap = root.hostWidget.snapshot();
@@ -422,16 +439,75 @@ Panel {
                             wrapMode: Text.WordWrap
                         }
 
-                        // hypr-input-switcher entry: opens the full Overlay on
-                        // its Rules tab. Shown only when the daemon binary is
-                        // present (the Overlay is that daemon's editor).
+                        // Footer management entries
                         Rectangle {
                             width: parent.width
                             height: Style.spacing.hairline
-                            visible: root.switcherVisible
                             color: Util.alpha(root.panelForeground, 0.16)
                         }
 
+                        // Input Method Configuration entry: dynamically adapts
+                        // to the active Input Method (msime, Rime Bloom, or fcitx5).
+                        Rectangle {
+                            width: parent.width
+                            height: Style.space(38)
+                            radius: Style.cornerRadius
+                            color: settingsMouse.containsMouse
+                                ? Style.hoverFillFor(root.panelForeground, root.panelAccent) : "transparent"
+
+                            Row {
+                                anchors.fill: parent
+                                anchors.leftMargin: Style.spacing.rowPaddingX
+                                anchors.rightMargin: Style.spacing.rowPaddingX
+                                spacing: Style.spacing.controlGap
+
+                                Item {
+                                    width: Style.space(18)
+                                    height: width
+                                    anchors.verticalCenter: parent.verticalCenter
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "⚙"
+                                        color: root.panelForeground
+                                        opacity: 0.75
+                                        font.pixelSize: Style.font.body
+                                    }
+                                }
+
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: parent.width - Style.space(18) - settingsChevron.width - Style.spacing.controlGap * 2
+                                    text: root.settingsLabel
+                                    color: root.panelForeground
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.body
+                                    elide: Text.ElideRight
+                                }
+
+                                Text {
+                                    id: settingsChevron
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "›"
+                                    color: root.panelForeground
+                                    opacity: 0.58
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.body
+                                }
+                            }
+
+                            MouseArea {
+                                id: settingsMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.openSettings()
+                            }
+                        }
+
+                        // hypr-input-switcher entry: opens the full Overlay on
+                        // its Rules tab. Shown only when the daemon binary is
+                        // present (the Overlay is that daemon's editor).
                         Rectangle {
                             width: parent.width
                             height: Style.space(38)

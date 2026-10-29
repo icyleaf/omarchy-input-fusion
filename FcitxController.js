@@ -168,3 +168,11 @@ function schemaDisplay(data, schema) {
 function panelNavigableRows(isRime, inputRows, schemaRows) {
     return isRime ? (inputRows || []).concat(schemaRows || []) : (inputRows || []);
 }
+
+// Resolves which settings tool to open and which label key to show based on
+// the active Input Method.
+function settingsTarget(isRime, imName) {
+    if (isRime) return { id: "rime", labelKey: "settings_rime" };
+    if (String(imName) === "msime") return { id: "msime", labelKey: "settings_msime" };
+    return { id: "fcitx5", labelKey: "settings_fcitx5" };
+}
