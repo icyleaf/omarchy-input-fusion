@@ -176,3 +176,12 @@ function settingsTarget(isRime, imName) {
     if (String(imName) === "msime") return { id: "msime", labelKey: "settings_msime" };
     return { id: "fcitx5", labelKey: "settings_fcitx5" };
 }
+
+// Resolves whether the active Input Method has a dedicated configuration tool
+// in addition to the persistent fcitx5 configuration tool.
+// Returns { id: "rime" | "msime", labelKey: "settings_rime" | "settings_msime" } or null.
+function contextualSettingsTarget(isRime, imName) {
+    if (isRime) return { id: "rime", labelKey: "settings_rime" };
+    if (String(imName) === "msime") return { id: "msime", labelKey: "settings_msime" };
+    return null;
+}

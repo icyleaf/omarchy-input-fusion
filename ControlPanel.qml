@@ -135,21 +135,27 @@ Panel {
         if (root.hostWidget) root.hostWidget.openRules();
     }
 
-    readonly property var currentSettingsTarget: Fcitx.settingsTarget(root.snapshot.isRime, root.snapshot.imName)
-    readonly property string settingsLabel: root.tr(root.currentSettingsTarget.labelKey)
+    readonly property var contextualSettings: Fcitx.contextualSettingsTarget(root.snapshot.isRime, root.snapshot.imName)
+    readonly property bool hasContextualSettings: root.contextualSettings !== null
+    readonly property string contextualSettingsLabel: root.contextualSettings ? root.tr(root.contextualSettings.labelKey) : ""
 
-    // Opens the appropriate configuration tool for the active Input Method.
-    function openSettings() {
-        if (!root.hostWidget) return;
-        var target = root.currentSettingsTarget;
+    // Opens the dedicated configuration tool for the active Input Method.
+    function openContextualSettings() {
+        if (!root.hostWidget || !root.contextualSettings) return;
+        var target = root.contextualSettings;
         root.close();
         if (target.id === "rime") {
             root.hostWidget.openBloom();
         } else if (target.id === "msime") {
             root.hostWidget.launchDesktopApp("msime-linux-settings");
-        } else {
-            root.hostWidget.launchDesktopApp("fcitx5-configtool");
         }
+    }
+
+    // Opens the persistent fcitx5 configuration tool.
+    function openFcitxSettings() {
+        if (!root.hostWidget) return;
+        root.close();
+        root.hostWidget.launchDesktopApp("fcitx5-configtool");
     }
 
     function takeSnapshot() {
@@ -446,13 +452,14 @@ Panel {
                             color: Util.alpha(root.panelForeground, 0.16)
                         }
 
-                        // Input Method Configuration entry: dynamically adapts
-                        // to the active Input Method (msime, Rime Bloom, or fcitx5).
+                        // Contextual settings entry: shown only when the active
+                        // Input Method provides a dedicated settings tool (e.g. msime, Rime Bloom).
                         Rectangle {
                             width: parent.width
                             height: Style.space(38)
+                            visible: root.hasContextualSettings
                             radius: Style.cornerRadius
-                            color: settingsMouse.containsMouse
+                            color: contextualSettingsMouse.containsMouse
                                 ? Style.hoverFillFor(root.panelForeground, root.panelAccent) : "transparent"
 
                             Row {
@@ -477,8 +484,8 @@ Panel {
 
                                 Text {
                                     anchors.verticalCenter: parent.verticalCenter
-                                    width: parent.width - Style.space(18) - settingsChevron.width - Style.spacing.controlGap * 2
-                                    text: root.settingsLabel
+                                    width: parent.width - Style.space(18) - contextualSettingsChevron.width - Style.spacing.controlGap * 2
+                                    text: root.contextualSettingsLabel
                                     color: root.panelForeground
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.body
@@ -486,7 +493,7 @@ Panel {
                                 }
 
                                 Text {
-                                    id: settingsChevron
+                                    id: contextualSettingsChevron
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: "›"
                                     color: root.panelForeground
@@ -497,11 +504,69 @@ Panel {
                             }
 
                             MouseArea {
-                                id: settingsMouse
+                                id: contextualSettingsMouse
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: root.openSettings()
+                                onClicked: root.openContextualSettings()
+                            }
+                        }
+
+                        // Persistent Fcitx5 Configuration entry: opens fcitx5-configtool.
+                        Rectangle {
+                            width: parent.width
+                            height: Style.space(38)
+                            radius: Style.cornerRadius
+                            color: fcitxSettingsMouse.containsMouse
+                                ? Style.hoverFillFor(root.panelForeground, root.panelAccent) : "transparent"
+
+                            Row {
+                                anchors.fill: parent
+                                anchors.leftMargin: Style.spacing.rowPaddingX
+                                anchors.rightMargin: Style.spacing.rowPaddingX
+                                spacing: Style.spacing.controlGap
+
+                                Item {
+                                    width: Style.space(18)
+                                    height: width
+                                    anchors.verticalCenter: parent.verticalCenter
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "⚙"
+                                        color: root.panelForeground
+                                        opacity: 0.75
+                                        font.pixelSize: Style.font.body
+                                    }
+                                }
+
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: parent.width - Style.space(18) - fcitxSettingsChevron.width - Style.spacing.controlGap * 2
+                                    text: root.tr("settings_fcitx5")
+                                    color: root.panelForeground
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.body
+                                    elide: Text.ElideRight
+                                }
+
+                                Text {
+                                    id: fcitxSettingsChevron
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "›"
+                                    color: root.panelForeground
+                                    opacity: 0.58
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.body
+                                }
+                            }
+
+                            MouseArea {
+                                id: fcitxSettingsMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.openFcitxSettings()
                             }
                         }
 

@@ -16,7 +16,7 @@ vm.runInContext(
     source +
         "\nmodule.exports = { controller, rime, parse, firstString, integer, stringArray, " +
         "inputMethodInfo, groupMembers, fullGroup, isKeyboardInputMethod, directRowSelected, " +
-        "schemaLabel, schemaDisplay, panelNavigableRows, settingsTarget };\n",
+        "schemaLabel, schemaDisplay, panelNavigableRows, settingsTarget, contextualSettingsTarget };\n",
     context,
 );
 const Fcitx = context.module.exports;
@@ -121,17 +121,17 @@ test("panelNavigableRows hides schemas when Rime is not active", () => {
     ]);
 });
 
-test("settingsTarget resolves settings destination and labelKey per active method", () => {
+test("contextualSettingsTarget resolves dedicated settings for rime and msime, null otherwise", () => {
     // Rime active -> Overlay Bloom tab
-    assert.deepEqual({ ...Fcitx.settingsTarget(true, "rime") }, { id: "rime", labelKey: "settings_rime" });
+    assert.deepEqual({ ...Fcitx.contextualSettingsTarget(true, "rime") }, { id: "rime", labelKey: "settings_rime" });
 
     // msime active -> MSIME settings
-    assert.deepEqual({ ...Fcitx.settingsTarget(false, "msime") }, { id: "msime", labelKey: "settings_msime" });
+    assert.deepEqual({ ...Fcitx.contextualSettingsTarget(false, "msime") }, { id: "msime", labelKey: "settings_msime" });
 
-    // Direct mode or generic layout -> Fcitx5 configtool
-    assert.deepEqual({ ...Fcitx.settingsTarget(false, "") }, { id: "fcitx5", labelKey: "settings_fcitx5" });
-    assert.deepEqual({ ...Fcitx.settingsTarget(false, "keyboard-us") }, { id: "fcitx5", labelKey: "settings_fcitx5" });
-    assert.deepEqual({ ...Fcitx.settingsTarget(false, "mozc") }, { id: "fcitx5", labelKey: "settings_fcitx5" });
+    // Direct mode or generic layout -> no extra contextual entry (Fcitx5 config is always persistent)
+    assert.equal(Fcitx.contextualSettingsTarget(false, ""), null);
+    assert.equal(Fcitx.contextualSettingsTarget(false, "keyboard-us"), null);
+    assert.equal(Fcitx.contextualSettingsTarget(false, "mozc"), null);
 });
 
 console.log(`${passed} checks passed`);
