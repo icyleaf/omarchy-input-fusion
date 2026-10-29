@@ -118,7 +118,24 @@ function fullGroup(raw) {
 // while State is "inactive", which is exactly the Direct Mode state, so the
 // panel must not list it beside the Direct row as a second, identical target.
 function isKeyboardInputMethod(member) {
-    return member && member.addon === "keyboard";
+    return !!member && member.addon === "keyboard";
+}
+
+// Whether the panel's Direct row is the selected Input Method row.
+//
+// The row stands for every current Input Method the panel folds into it. That
+// is Direct Mode (fcitx5 deactivated, State 1), and it is also a plain keyboard
+// layout while fcitx5 is *active* (State 2): activating fcitx5 in a group whose
+// current Input Method is a layout selects that layout rather than deactivating,
+// and its members are not listed as rows of their own. Checking only `state !== 2`
+// would leave the panel with no selection at all in that ordinary English state.
+function directRowSelected(state, members, imName) {
+    if (state !== 2) return true;
+    var list = members || [];
+    for (var i = 0; i < list.length; i++) {
+        if (String(list[i].name) === String(imName)) return isKeyboardInputMethod(list[i]);
+    }
+    return false;
 }
 
 // Config.yaml helpers: resolve a Schema id back to its label / display name.
@@ -143,4 +160,11 @@ function schemaDisplay(data, schema) {
     var label = schemaLabel(data, schema);
     if (!label) return String(schema);
     return displayNames(data)[label] || label;
+}
+
+// The unified row list the panel can navigate and select from. When the active
+// Input Method is not Rime (such as msime or Direct Mode), Schemas are hidden
+// and must not be in the navigable row list.
+function panelNavigableRows(isRime, inputRows, schemaRows) {
+    return isRime ? (inputRows || []).concat(schemaRows || []) : (inputRows || []);
 }

@@ -78,7 +78,8 @@ _Avoid_: orphan, dangling schema, untracked
 The set of Schemas a surface offers: every Installed Schema (present on disk),
 plus the Enabled Schemas, plus the Schemas owned by Installed Packages, plus
 the Active Schema. fcitx5 exposes only the Enabled set, so the Installed set is
-discovered from the Rime user directory.
+discovered from the Rime user directory. In the control panel, this list is only
+visible while Rime is the active Input Method.
 _Avoid_: all schemas, available schemas
 
 **Input Method Group**:
@@ -116,6 +117,7 @@ The optional part of the plugin that surfaces Bloom's Enabled Schemas,
 Installed Packages, and updates. Reads state through `bloom --json`. Fast
 writes (enable, disable, deploy) run in-process; heavy writes (install,
 upgrade, remove) run Bloom in a terminal rather than inside the shell process.
+In the control panel, this section is only visible while Rime is the active Input Method.
 _Avoid_: bloom plugin, schema manager
 
 **Rule Bridge**:

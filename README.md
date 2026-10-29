@@ -102,6 +102,7 @@ falls back to its two fcitx5 sections and the tab reports it as missing.
 ├── FcitxController.js       # fcitx5 / Rime D-Bus helpers (busctl --json)
 ├── BloomController.js       # bloom --json argv builders and parsers
 ├── i18n.js                  # Internationalization (EN / ZH)
+├── Language.qml             # Shared language singleton for every surface
 ├── yaml.js                  # Pure JavaScript YAML parser and serializer
 ├── test/                    # Node unit tests for the JS seams
 ├── LICENSE

@@ -4,6 +4,7 @@ import qs.Commons
 import qs.Ui
 import "i18n.js" as I18n
 import "BloomController.js" as Bloom
+import "FcitxController.js" as Fcitx
 
 // Control panel for the Input Fusion bar widget: the fcitx5 Input Method
 // section, the unified Schema List, and the Bloom bridge (packages, updates).
@@ -26,18 +27,14 @@ Panel {
     property var anchorItem: null
     property var hostWidget: null
 
-    property string lang: {
-        var envLang = Quickshell.env("LANG") || "";
-        return envLang.toLowerCase().indexOf("zh") !== -1 ? "zh" : "en";
-    }
+    // Bound to the plugin's shared language, so a switch made in the Overlay
+    // reaches this panel and no surface writes over another's choice.
+    readonly property string lang: Language.code
 
     function tr(key) {
         var dummy = root.lang;
         return I18n.t(key);
     }
-
-    onLangChanged: I18n.setLanguage(root.lang)
-    Component.onCompleted: I18n.setLanguage(root.lang)
 
     readonly property color panelForeground: Color.popups.text
     readonly property color panelBackground: Color.popups.background
@@ -149,7 +146,7 @@ Panel {
     }
 
     function allRows() {
-        return root.inputRows.concat(root.schemaRows);
+        return Fcitx.panelNavigableRows(root.snapshot.isRime, root.inputRows, root.schemaRows);
     }
 
     function currentRow() {
@@ -176,6 +173,10 @@ Panel {
     }
 
     function switchSection(direction) {
+        if (!root.snapshot.isRime || root.schemaRows.length === 0) {
+            root.moveCursor(direction);
+            return;
+        }
         if (direction > 0) root.cursor = root.inputRows.length;
         else root.cursor = 0;
     }
@@ -268,47 +269,43 @@ Panel {
                             delegate: rowDelegate
                         }
 
-                        PanelSectionHeader {
+                        // --- Schemas (visible only while Rime is the active Input Method) ---
+                        Column {
                             width: parent.width
-                            foreground: root.panelForeground
-                            text: root.tr("section_schemas")
-                        }
+                            visible: root.snapshot.isRime
+                            spacing: Style.space(10)
 
-                        Text {
-                            width: parent.width
-                            visible: !root.snapshot.isRime
-                            text: root.tr("rime_inactive_hint")
-                            color: root.panelForeground
-                            opacity: 0.58
-                            font.family: Style.font.family
-                            font.pixelSize: Style.font.caption
-                            wrapMode: Text.WordWrap
-                        }
+                            PanelSectionHeader {
+                                width: parent.width
+                                foreground: root.panelForeground
+                                text: root.tr("section_schemas")
+                            }
 
-                        Text {
-                            width: parent.width
-                            visible: !root.bloomVisible
-                            text: root.tr("schema_fallback_hint")
-                            color: root.panelForeground
-                            opacity: 0.42
-                            font.family: Style.font.family
-                            font.pixelSize: Style.font.caption
-                            wrapMode: Text.WordWrap
-                        }
+                            Text {
+                                width: parent.width
+                                visible: !root.bloomVisible
+                                text: root.tr("schema_fallback_hint")
+                                color: root.panelForeground
+                                opacity: 0.42
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption
+                                wrapMode: Text.WordWrap
+                            }
 
-                        Text {
-                            width: parent.width
-                            visible: root.schemaRows.length === 0
-                            text: root.tr("bloom_no_enabled")
-                            color: root.panelForeground
-                            opacity: 0.42
-                            font.family: Style.font.family
-                            font.pixelSize: Style.font.caption
-                        }
+                            Text {
+                                width: parent.width
+                                visible: root.schemaRows.length === 0
+                                text: root.tr("bloom_no_enabled")
+                                color: root.panelForeground
+                                opacity: 0.42
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption
+                            }
 
-                        Repeater {
-                            model: root.schemaRows
-                            delegate: schemaRowDelegate
+                            Repeater {
+                                model: root.schemaRows
+                                delegate: schemaRowDelegate
+                            }
                         }
 
                         // --- Bloom (read + write) -------------------------------
@@ -316,7 +313,7 @@ Panel {
                         // their heavy writes in a terminal (see Widget.launchBloom).
                         Column {
                             width: parent.width
-                            visible: root.bloomVisible
+                            visible: root.snapshot.isRime && root.bloomVisible
                             spacing: Style.space(6)
 
                             PanelSectionHeader {
@@ -517,9 +514,6 @@ Panel {
                     return Style.hoverFillFor(root.panelForeground, root.panelAccent);
                 return "transparent";
             }
-            // `muted` greys a Rime Schema row while Rime is inactive, but the
-            // row stays clickable: selecting it switches to Rime first.
-            opacity: modelData.muted ? 0.5 : 1.0
 
             Row {
                 anchors.fill: parent

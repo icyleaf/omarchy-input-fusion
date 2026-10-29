@@ -25,23 +25,14 @@ Item {
     property int currentTab: 0 // 0: Rules, 1: Input Methods, 2: Bloom
 
     // Internationalization (i18n)
-    property string lang: {
-        var envLang = Quickshell.env("LANG") || "";
-        return envLang.toLowerCase().indexOf("zh") !== -1 ? "zh" : "en";
-    }
+    // The shared language (Language.qml). The header toggle sets it so the bar
+    // widget and the control panel follow this Overlay's choice too.
+    readonly property string lang: Language.code
 
     function tr(key, arg0) {
         // Evaluate root.lang so that QML property binding tracks language switch
         var dummy = root.lang;
         return I18n.t(key, arg0);
-    }
-
-    onLangChanged: {
-        I18n.setLanguage(root.lang);
-    }
-
-    Component.onCompleted: {
-        I18n.setLanguage(root.lang);
     }
 
     // System Status Properties (bound to the shared Backend probe, ADR 0004)
@@ -715,9 +706,7 @@ Item {
                         Button {
                             text: root.lang === "zh" ? "🇨🇳 中文" : "🇺🇸 EN"
                             bordered: true
-                            onClicked: {
-                                root.lang = (root.lang === "zh" ? "en" : "zh");
-                            }
+                            onClicked: Language.toggle()
                         }
 
                         // Close Button

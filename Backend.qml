@@ -434,9 +434,12 @@ Item {
     // An immutable view taken while the panel is still closed, so it reflects
     // the real application context rather than the panel's shadowed one.
     function snapshot() {
+        // The Direct row also represents an active keyboard layout, so exactly
+        // one Input Method row is selected in every fcitx5 state.
+        var directSelected = Fcitx.directRowSelected(backend.state, backend.groupMembers, backend.imName);
         var inputRows = [{ kind: "input", global: 0, value: "__direct__", label: I18n.t("direct_label"),
                            sub: I18n.t("direct_sub"), badge: "A",
-                           selected: backend.state !== 2, enabled: true }];
+                           selected: directSelected, enabled: true }];
         for (var i = 0; i < backend.groupMembers.length; i++) {
             var member = backend.groupMembers[i];
             // A plain keyboard layout is reported as State "inactive", the same

@@ -27,9 +27,15 @@ BarWidget {
         suspendReads: root.panelOpen
     }
 
-    readonly property string lang: {
-        var envLang = Quickshell.env("LANG") || "";
-        return envLang.toLowerCase().indexOf("zh") !== -1 ? "zh" : "en";
+    // The plugin's shared language (Language.qml). The Overlay's toggle sets
+    // it, so this surface follows without deriving a language of its own.
+    readonly property string lang: Language.code
+
+    function tr(key, arg0) {
+        // Reading root.lang makes this a dependency, so the text re-evaluates
+        // when the shared language changes.
+        var dummy = root.lang;
+        return I18n.t(key, arg0);
     }
 
     readonly property bool autoSwitchToRime: {
@@ -77,8 +83,8 @@ BarWidget {
 
     readonly property string tooltip: {
         var base;
-        if (backend.unavailable) base = I18n.t("fcitx_unavailable");
-        else if (backend.direct) base = I18n.t("direct_label");
+        if (backend.unavailable) base = root.tr("fcitx_unavailable");
+        else if (backend.direct) base = root.tr("direct_label");
         else {
             base = backend.isRime ? backend.imDisplay + " · " + backend.schema : backend.imDisplay;
             if (backend.lastError !== "") base += " — " + backend.lastError;
@@ -86,7 +92,7 @@ BarWidget {
         // Bloom only touches the tooltip: a pending update is worth a glance
         // without spending bar space on it.
         if (backend.bloomAvailable && backend.bloomUpdatesAvailable > 0)
-            base += " · " + I18n.t("bloom_updates_available", backend.bloomUpdatesAvailable);
+            base += " · " + root.tr("bloom_updates_available", backend.bloomUpdatesAvailable);
         return base;
     }
 
@@ -162,8 +168,7 @@ BarWidget {
     onBarChanged: injectPanel()
 
     Component.onCompleted: {
-        // I18n is a shared-library singleton; seed the language once here.
-        I18n.setLanguage(root.lang);
+        // The language is Language.qml's, seeded there once for every surface.
         backend.refresh();
         backend.detectBloom();
         backend.detectSwitcher();

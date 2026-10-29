@@ -4,6 +4,6 @@
   "private": true,
   "description": "Node unit tests for the Input Fusion JavaScript seams",
   "scripts": {
-    "test": "node test/bloom_controller.test.mjs"
+    "test": "node test/bloom_controller.test.mjs && node test/fcitx_controller.test.mjs"
   }
 }
